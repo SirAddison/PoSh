@@ -1,0 +1,139 @@
+<#
+.Synopsis
+    Finds Local Admin Accounts on workstations or servers.
+.DESCRIPTION
+    See Above.
+    
+.EXAMPLE
+    Get-LocalAdminAccounts -ComputerName <Computer Name> 
+       
+    This example will identify local admin accounts on a single computer. Note: There will be an output file will be dumped to the desktop by default and called LocalAdminAccounts.csv.
+          
+.EXAMPLE
+    Get-LocalAdminAccounts -ComputerName <Computer Name, Computer Name> -OutputPath "c:\LocalAdminAccounts.csv"
+          
+    This example will identify local admin accounts on multiple computers and will output the csv file to "c:\LocalAdminAccounts.csv" defined by the OutputPath parameter above.
+          
+.EXAMPLE
+    Get-LocalAdminAccounts -ComputerName $(Get-Content C:\computers.txt) 
+    
+    This example will identify local admin accounts on multiple computers that are imported from a file.
+    
+.EXAMPLE
+    Get-LocalAdminAccounts -ComputerName $(Get-Content C:\computers.txt) -AccountType <Predefined List>
+    
+    This example will identify local admin accounts on multiple computers that are imported from a file. There will be a pre-defined list in the -AccountType parameter consisting of either local accounts, active directory accounts, or both. Accounts that are found from the pre-defined list will be output to the desktop by default and will be called LocalAdminAccounts.csv.
+    
+.EXAMPLE
+    Get-LocalAdminAccounts -OUPath <"OU=Computers,DC=Domain,DC=Com"> -AccountType <Predefined List> 
+    
+    This example will identify local admin accounts on any computers found within the distinguished name path that is defined using the -OUPath parameter. There will be a pre-defined list in the -AccountType parameter consisting of either local accounts, active directory accounts, or both. Accounts that are found from the pre-defined list will be output to the desktop by default and will be called LocalAdminAccounts.csv.
+    
+ .AUTHOR
+    Sir Addison
+ #>
+ 
+function Get-LocalAdminAccounts{
+
+    [CmdletBinding(DefaultParameterSetName="ComputerName")]
+    [Alias('LAA')]    
+    Param
+    (
+      
+         # The input for this parameter is the Computer hostname to which you want to collect Local Addmin Account data.
+         [Parameter(Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    Position=0,
+                    ParameterSetName="ComputerName")]            
+     
+         [array]$ComputerName = $env:COMPUTERNAME,
+
+         [Parameter(Mandatory=$true,
+                    Position=0,
+                    ParameterSetName="OUPath")]
+         # Distinguished Name path of which Organizational Unit you would like to find computers in.
+         $OUPath,
+     
+         [Parameter(Mandatory=$false,
+                    Position=1)]
+         # Path on the computer where you would like the output file.
+         $OutputPath = "$env:USERPROFILE\Desktop\LocalAdminAccounts.csv"        
+     
+     )
+     
+    DynamicParam{
+         
+         $Attributes = New-Object System.Management.Automation.ParameterAttribute
+         $Attributes.ParameterSetName = '__AllParameterSets'
+         $Attributes.Mandatory = $true
+         $AttributeCollection = New-Object -Type System.Collections.ObjectModel.Collection[System.Attribute]
+         $AttributeCollection.Add($Attributes)
+             
+         $Values ="All","ActiveDirectory","Local"
+    
+         $ValidateSet = New-Object System.Management.Automation.ValidateSetAttribute($Values)
+         $AttributeCollection.Add($ValidateSet)
+             
+         $DynParam = New-Object -Type System.Management.Automation.RuntimeDefinedParameter("AccountType", [string], $attributeCollection)
+             
+         $ParamDictionary = New-Object -Type System.Management.Automation.RuntimeDefinedParameterDictionary
+         $ParamDictionary.Add("AccountType", $DynParam)
+             
+         return $ParamDictionary
+             
+    }
+             
+             
+    Process{
+                               #Look this up
+         $AccountType = $PSBoundParameters.AccountType
+             
+
+         $OutputPath = "$env:USERPROFILE\Desktop\LocalAdminAccounts.csv"
+         $i = 0
+          
+         If($OUPath){$ComputerName = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+                        
+         $AccountInfo = @()
+         foreach($comp in $ComputerName){
+            try{
+            $WSManCheck = Test-WSMan -ComputerName $comp -ErrorAction stop
+            }
+            catch{write-host $comp 'failed WSMan Connectivity Test.'} 
+                         
+            try{                      
+                if($WSManCheck){
+            
+                Write-Progress -Activity "Scanning Computers $comp" -Status "Progress:" -PercentComplete ($i/$ComputerName.count*100)
+
+                $i++ 
+          
+                    if($AccountType -eq 'All'){
+                        $AllAdmins = Invoke-command -ComputerName $comp -ScriptBlock{Get-LocalGroupMember Administrators }
+                        Foreach($Admin in $AllAdmins){
+                        $Admin.Name = ($Admin.Name).Replace($Admin.Name,($Admin.Name).split("\")[1])
+                        $AccountInfo += $Admin
+                        }               
+                    }      
+                    elseif($AccountType -eq 'Local'){ 
+                        $LocalAdmins = Invoke-command -ComputerName $comp -ScriptBlock{Get-LocalGroupMember Administrators | where principalsource -eq local}
+                        Foreach($Admin in $LocalAdmins){
+                        $Admin.Name = ($Admin.Name).Replace($Admin.Name,($Admin.Name).split("\")[1])
+                        $AccountInfo += $Admin
+                        }       
+                    }
+                    elseif($AccountType -eq 'ActiveDirectory'){
+                        $ActiveDirectoryAdmins = Invoke-command -ComputerName $comp -ScriptBlock{Get-LocalGroupMember Administrators | where principalsource -eq ActiveDirectory}
+                        Foreach($Admin in $ActiveDirectoryAdmins){
+                        $Admin.Name = ($Admin.Name).Replace($Admin.Name,($Admin.Name))
+                        $AccountInfo += $Admin
+                        }              
+                    }
+               }
+             }
+             catch{}
+            }
+            $AccountInfo | export-csv $OutputPath -NoTypeInformation   
+    }
+                            
+}
