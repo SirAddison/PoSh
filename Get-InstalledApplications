@@ -1,0 +1,152 @@
+<#
+.Synopsis
+   Finds installed applications with the ability to filter based on a predefined list.
+
+.DESCRIPTION
+   See Above.
+
+.EXAMPLE
+   Get-InstalledApplications -ComputerName <Computer Name> 
+
+   This example will identify installed on a single computer. Note: There will be an output file will be dumped to the desktop by default and called InstalledApplications.csv.
+
+.EXAMPLE
+   Get-InstalledApplications -ComputerName <Computer Name, Computer Name> -OutputPath "c:\InstalledApplications.csv"
+
+   This example will identify installed on multiple computers and will output the csv file to "c:\InstalledApplications.csv" defined by the OutputPath parameter above.
+
+.EXAMPLE
+   Get-InstalledApplications -ComputerName $(Get-Content C:\computers.txt) 
+
+   This example will identify installed Applications on multiple computers that are imported from a file.
+
+.EXAMPLE
+   Get-InstalledApplications -ComputerName $(Get-Content C:\computers.txt) -ApplicationType <Predefined List>
+
+   This example will identify installed Applications on multiple computers that are imported from a file, and cross-reference the full application list against the pre-defined list that is chosen in the -ApplicationType parameter dropdown menu. Applications that are missing from the pre-defined list will be output to the desktop by default and will be called InstalledApplications.csv.
+
+.EXAMPLE
+   Get-InstalledApplications -OUPath <"OU=Computers,DC=Domain,DC=Com"> -ApplicationType <Predefined List> 
+
+   This example will identify installed Applications on any computers found within the distinguished name path that is defined using the -OUPath parameter, and cross-reference the full application list against the pre-defined list that is chosen in the -ApplicationType parameter dropdown menu. Applications that are missing from the pre-defined list will be output to the desktop by default and will be called InstalledApplications.csv.
+
+.AUTHOR
+   Sir Addison  
+
+#>
+function Get-InstalledApplications
+{
+    [CmdletBinding(DefaultParameterSetName=’ComputerName’)]
+    [Alias('GIA')]
+    Param
+    (
+        # The input for this parameter is the Computer hostname to which you want to collect Installed Application data.
+        [Parameter(Mandatory=$false,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0,
+                   ParameterSetName=’ComputerName’)]            
+        [array]$ComputerName = $env:COMPUTERNAME,
+
+        [Parameter(Mandatory=$true,
+                   Position=0,
+                   ParameterSetName=’OUPath’)]
+        # Distinguished Name path of which Organizational Unit you would like to find computers in.
+        $OUPath,
+
+        [Parameter(Mandatory=$false,
+                   Position=1)]
+        # Path on the computer where you would like the output file.
+        $OutputPath = "$env:USERPROFILE\Desktop\InstalledApplications.csv"        
+        
+
+)
+
+DynamicParam{
+    
+    $Attributes = New-Object System.Management.Automation.ParameterAttribute
+    $Attributes.ParameterSetName = '__AllParameterSets'
+    $Attributes.Mandatory = $false
+    $AttributeCollection = New-Object -Type System.Collections.ObjectModel.Collection[System.Attribute]
+    $AttributeCollection.Add($Attributes)
+    
+    $Values ="SecurityApplications"
+    
+    $ValidateSet = New-Object System.Management.Automation.ValidateSetAttribute($Values)
+    $AttributeCollection.Add($ValidateSet)
+
+    $DynParam = New-Object -Type System.Management.Automation.RuntimeDefinedParameter("ApplicationType", [string], $attributeCollection)
+
+    $ParamDictionary = New-Object -Type System.Management.Automation.RuntimeDefinedParameterDictionary
+    $ParamDictionary.Add("ApplicationType", $DynParam)
+
+    return $ParamDictionary
+
+    }
+
+    Process{
+
+    $ApplicationType = $PSBoundParameters.ApplicationType
+
+        $OutputPath = "$env:USERPROFILE\Desktop\InstalledApplications.csv"
+
+        $command = {
+        $Applications = (Get-ItemProperty HKLM:\Software\Classes\Installer\Products\*) 
+        ForEach($App in $Applications){Get-ItemProperty $App.PSPath | select ProductName}
+        }
+        
+        $i = 0
+        $DataSets = @()
+
+        If($OUPath){$ComputerName = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+       
+        foreach($comp in $ComputerName){
+            try{
+            $WSManCheck = Test-WSMan -ComputerName $comp -ErrorAction SilentlyContinue 
+            }
+            catch{}      
+         }
+          
+        try{
+            if($WSManCheck){                
+                if($ApplicationType -eq "SecurityApplications"){ 
+
+                $AppList = @('McAfee Agent','McAfee Endpoint Security Threat Prevention','McAfee DLP Endpoint','McAfee Endpoint Security Adaptive Threat Protection',
+                             'McAfee Endpoint Security Web Control','McAfee Data Exchange Layer for MA','McAfee Host Intrusion Prevention','McAfee Endpoint Security Platform','Tychon','Tanium Client Installer','Configuration Manager Client')
+              
+                Write-Progress -Activity "Scanning Computers $comp" -Status "Progress:" -PercentComplete ($i/$ComputerName.count*100)
+                $i++
+
+                $MissingApps = New-Object -TypeName psobject
+                $MissingApps | Add-Member -MemberType NoteProperty -Name Applications -Value ($AppList | where-object {$_ -notin $(Invoke-Command -ComputerName $comp -ScriptBlock $command | Select ProductName -ExpandProperty ProductName| Where ProductName -In $AppList)})
+
+                $DataSets+= @(
+                    Foreach ($Application in $MissingApps.Applications){
+
+                    New-Object PSObject -Property @{ComputerName=$comp;
+                    'Missing Applications'=$Application}
+                    }
+                )
+                }
+                else{                
+                
+                $i++ 
+                Write-Progress -Activity "Scanning Computers $comp" -Status "Progress:" -PercentComplete ($i/$ComputerName.count*100)
+
+                $AppData = New-Object -TypeName psobject
+                $AppData | Add-Member -MemberType NoteProperty -Name Applications -Value (Invoke-Command -ComputerName $comp -ScriptBlock $command | Select ProductName -ExpandProperty ProductName)
+
+                $DataSets+= @(
+                    Foreach ($Application in $AppData.Applications){
+
+                    New-Object PSObject -Property @{ComputerName=$comp;
+                    'All Applications'=$Application}
+                    }
+                    )
+                }    
+                   
+            }
+        }
+        catch{}
+            $DataSets | export-csv $OutputPath -NoTypeInformation
+    }
+}
