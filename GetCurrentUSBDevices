@@ -1,0 +1,92 @@
+.Synopsis
+   Finds plugged in USB Devices
+.DESCRIPTION
+   see above
+.EXAMPLE
+   Get-CurrentUSBDevices -ComputerName <Computer Name> 
+
+   This example will find USB devices currently plugged into a single computer. Note: The output file will be dumped to the desktop by default and called usb.csv.
+
+.EXAMPLE
+   Get-CurrentUSBDevices -ComputerName <Computer Name, Computer Name> -OutputPath "c:\usb.csv"
+
+   This example will find USB devices currently plugged into multiple computers and will output the csv file to "c:\usb.csv" defined by the OutputPath parameter above.
+
+.EXAMPLE
+   Get-CurrentUSBDevices -ComputerName $(Get-Content C:\computers.txt) 
+
+   This example will find USB devices currently plugged into multiple computers that are imported from a file.
+
+#>
+function Get-CurrentUSBDevices
+{
+    [CmdletBinding(DefaultParameterSetName="ComputerName")]
+    [Alias('GCUD')]
+    Param
+    (
+        # The input for this parameter is the Computer hostname to which you want to collect USB data.
+        [Parameter(Mandatory=$false,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0,
+                   ParameterSetName="ComputerName")]  
+
+        [array]$ComputerName = $env:COMPUTERNAME,
+
+        [Parameter(Mandatory=$true,
+                   Position=0,
+                   ParameterSetName="OUPath")]
+        # Distinguished Name path of which Organizational Unit you would like to find computers in.
+        $OUPath,
+
+        [Parameter(Mandatory=$false,
+                   Position=1)]
+        # Path on the computer where you would like the output file.
+        $OutputPath = "$env:USERPROFILE\Desktop\usb.csv"
+
+)
+
+        If($OUPath){$ComputerName = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+
+    $Obj=@()
+    $j = 0
+    foreach ($comp in $ComputerName){
+
+        $j++
+        Write-Progress -Activity "Scanning Computers $comp" -Status "Progress:" -PercentComplete ($j/$ComputerName.count*100)
+
+        $objs = New-Object -TypeName psobject
+        $objs | Add-Member -MemberType NoteProperty -Name USB -Value (Get-WmiObject Win32_USBControllerDevice -ComputerName $comp).dependent
+
+
+        $i = 0
+
+        $obj+= @(
+        Foreach ($USB in $objs.USB){
+
+            New-Object PSObject -Property @{UserName=(Get-WmiObject -Class win32_computersystem -ComputerName $comp).UserName;
+            ComputerName=(Get-WmiObject -Class win32_computersystem -ComputerName $comp).Name;
+            Description=([wmi](Get-WmiObject -class Win32_USBControllerDevice -computername $comp -Property dependent).dependent[$i]).description;
+            USB=$USB}
+            $i++
+        }
+        )
+
+    }
+
+
+    $obj | 
+
+        Where-Object -FilterScript {
+            ($_.Description -ne "USB Root Hub (USB 3.0)") -and
+            ($_.Description -ne "USB Input Device") -and
+            ($_.Description -ne "Smart card filter driver") -and
+            ($_.Description -ne "HID Keyboard Device") -and
+            ($_.Description -ne "OMNIKEY 3x21") -and 
+            ($_.Description -ne "HID-compliant mouse") -and
+            ($_.Description -ne "Microsoft Usbccid Smartcard Reader (WUDF)") } |
+        
+            #ft Description, ComputerName, UserName, USB 
+            Export-Csv -Path $OutputPath -NoTypeInformation 
+
+
+}
