@@ -1,0 +1,143 @@
+<#
+.Synopsis
+   Monitors the clipboard on a specified interval for changes to copied text and outputs it on the screen.
+
+.DESCRIPTION
+   See Above.
+
+.EXAMPLE
+   Get-ClipBoardContent -ComputerName <Computer Name> 
+
+   This example will monitor the clipboard on a single computer. Note: There will be an output file will be dumped to the desktop by default and called ClipBoardContent.txt.
+
+.EXAMPLE
+   Get-ClipBoardContent -ComputerName <Computer Name, Computer Name> -OutputPath "c:\ClipBoardContent.txt"
+
+   This example will monitor the clipboard on multiple computers one after another and will output the csv file to "c:\ClipBoardContent.txt" defined by the OutputPath parameter above.
+
+.EXAMPLE
+   Get-ClipBoardContent -ComputerName $(Get-Content C:\computers.txt) 
+
+   This example will monitor the clipboard on multiple computers one after another that are imported from a file  and will output the csv file to "c:\ClipBoardContent.txt" defined by the OutputPath parameter above.
+
+.EXAMPLE
+   Get-ClipBoardContent -ComputerName -CollectionLimit <Number / how long you want to monitor computers clipboard in minutes>
+
+   This example will monitor the clipboard on a single computer for a certain duration outlined by the -CollectionLimit parameter.
+
+.EXAMPLE
+   Get-ClipBoardContent -ComputerName -PollInterval <Number / how frequent you want to dump the clipboard content in seconds>
+
+   This example will monitor the clipboard on a single computer and output what is copied to the clipboard every 15 seconds unless defined differently by the -PollInterval parameter.
+
+
+.PARAMETER CollectionLimit
+
+   Specifies the interval in minutes to capture clipboard text. Defaults to indefinite collection.
+
+.PARAMETER PollInterval
+
+   Interval (in seconds) to check the clipboard for changes, defaults to 15 seconds.
+
+
+.AUTHOR
+   Sir Addison
+    
+#>
+
+function Get-ClipBoard-Content {
+
+        [CmdletBinding(DefaultParameterSetName="ComputerName")]
+        [Alias('GCC','Get-ClipboardContent','Get-ClipBoardContent')]
+        Param 
+        (
+
+        [Parameter(Mandatory=$false,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0,
+                   ParameterSetName="ComputerName")]
+
+        [array]$ComputerName = $env:COMPUTERNAME,
+
+        [Parameter(Mandatory=$false,
+                   Position=0)]
+        # How long do you want the sript to run? (In minutes) 
+        $CollectionLimit,
+
+        [Parameter(Mandatory=$false,
+                   Position=2)]
+        # Path on the computer where you would like the output file.
+        $OutputPath = "$env:USERPROFILE\Desktop\ClipBoardContent.txt",   
+   
+        # Suspends the activity in a script or session for the specified period of time. (In Seconds)
+        $PollInterval = 15,
+        $seconds = $PollInterval
+        )
+
+    Add-Type -AssemblyName $("Sys" + "tem." + "Win" + "dows." + "For" + "ms")
+
+    # Calculate the stop time if one is specified
+    if($CollectionLimit) {
+        $StopTime = (Get-Date).AddMinutes($CollectionLimit)
+    }
+    else {
+        $StopTime = (Get-Date).AddMinutes(1)
+    }
+
+    # Suspends the activity in a script or session for the specified period of time. (In Seconds)
+    if($PollInterval) {
+        #$PollInterval 
+    }
+    else {
+        $PollInterval = 15
+    }
+    ""
+    Write-Host "Monitoring will stop at" $StopTime
+    ""
+    $TimeStamp = (Get-Date -Format dd/MMM/yyyy:HH:mm:ss)
+    "=== Get-Cl" + "ipboardCont" + "ents Starting at $TimeStamp ===`n"
+
+    # Used to check if the contents have changed
+    $PrevLength = 0
+    $PrevFirstChar = ""
+ 
+    for(;;){
+        if ((Get-Date) -lt $StopTime){
+               
+            $tb = New-Object $("Sys" + "tem." + "Wind" + "ows." + "For" + "ms." + "Text" + "Box")
+            $tb.Multiline = $true
+            $tb.Paste()
+
+            # only output clipboard data if it's changed
+            if (($tb.Text.Length -ne 0) -and ($tb.Text.Length -ne $PrevLength)){
+
+                if($PrevFirstChar -ne ($tb.Text)[0]){
+                    # if the length isn't 0, the length has changed, and the first character
+                    # has changed, assume the clipboard has changed
+                    # YES I know there might be edge cases :)                                                  
+                    $TimeStamp = (Get-Date -Format dd/MMM/yyyy:HH:mm:ss)
+                    "`n=== $TimeStamp ===`n" | Out-File $OutputPath -append 
+                    "`n=== $TimeStamp ===`n" 
+                    $tb.Text | Out-File $OutputPath -append 
+                    $tb.Text
+                    $PrevFirstChar = ($tb.Text)[0]
+                    $PrevLength = $tb.Text.Length
+                }
+            }     
+        }
+        else{
+            $TimeStamp = (Get-Date -Format dd/MMM/yyyy:HH:mm:ss)
+            "`n=== Get-Clip" + "boardCon" + "tents Shutting down at $TimeStamp ===`n"
+            Break; 
+        } 
+ 
+        #Progress Bar starts here 
+        $doneDT = (Get-Date).AddSeconds($seconds)
+        while($doneDT -gt (Get-Date)) {
+            $secondsLeft = $doneDT.Subtract((Get-Date)).TotalSeconds
+            $percent = ($seconds - $secondsLeft) / $seconds * 100
+            Write-Progress -Activity "Monitiring Clipboard of $env:COMPUTERNAME 'Monitoring will stop at' $StopTime" -Status "Saving captured information in" -SecondsRemaining $secondsLeft -PercentComplete $percent
+            [System.Threading.Thread]::Sleep(500)
+        } 
+    }    
+}
