@@ -1,5 +1,4 @@
 <#
-
 .Synopsis
    Finds plugged in USB Devices
 .DESCRIPTION
@@ -18,8 +17,8 @@
    Get-CurrentUSBDevices -ComputerName $(Get-Content C:\computers.txt) 
 
    This example will find USB devices currently plugged into multiple computers that are imported from a file.
-
 #>
+
 function Get-CurrentUSBDevices
 {
     [CmdletBinding(DefaultParameterSetName="ComputerName")]
