@@ -132,12 +132,15 @@ function Get-ClipBoard-Content {
         } 
  
         #Progress Bar starts here 
-        $doneDT = (Get-Date).AddSeconds($seconds)
+                $doneDT = (Get-Date).AddSeconds($seconds)
         while($doneDT -gt (Get-Date)) {
             $secondsLeft = $doneDT.Subtract((Get-Date)).TotalSeconds
+            $secondsLeft2 = (New-TimeSpan -Start (Get-Date) -End $StopTime).TotalSeconds
             $percent = ($seconds - $secondsLeft) / $seconds * 100
-            Write-Progress -Activity "Monitiring Clipboard of $env:COMPUTERNAME 'Monitoring will stop at' $StopTime" -Status "Saving captured information in" -SecondsRemaining $secondsLeft -PercentComplete $percent
-            [System.Threading.Thread]::Sleep(500)
-        } 
+            $percent2 = ($t2 - $secondsLeft2) / $t2  * 100
+            Write-Progress -Activity "Monitiring Clipboard of $env:COMPUTERNAME" -Status "Monitoring .. " -SecondsRemaining $secondsLeft2 -PercentComplete $percent2
+            Write-Progress -Id 1 -Activity "Logging clipboard information" -Status "Dumping to $OutputPath " -SecondsRemaining $secondsLeft -PercentComplete $percent
+            [System.Threading.Thread]::Sleep(500) 
+            }
     }    
 }
