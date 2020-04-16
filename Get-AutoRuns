@@ -6,17 +6,17 @@
     See Above.
     
 .EXAMPLE
-    Get-AutoRuns -ComputerName <Computer Name> 
+    Get-AutoRuns -Computer <Computer Name> 
        
     This example will identify which apps run automatically on startup on a single computer. Note: There will be an output file will be dumped to the desktop by default and called AutoRuns.csv.
           
 .EXAMPLE
-    Get-AutoRuns -ComputerName <Computer Name, Computer Name> -OutputPath "c:\AutoRuns.csv"
+    Get-AutoRuns -Computer <Computer Name, Computer Name> -OutputPath "c:\AutoRuns.csv"
           
     This example will identify which apps run automatically on startup on multiple computers and will output the csv file to "c:\AutoRuns.csv" defined by the OutputPath parameter above.
           
 .EXAMPLE
-    Get-AutoRuns -ComputerName $(Get-Content C:\computers.txt) 
+    Get-AutoRuns -Computer $(Get-Content C:\computers.txt) 
     
     This example will identify which apps run automatically on startup on multiple computers that are imported from a file.
         
@@ -26,13 +26,13 @@
     This example will identify which apps run automatically on startup on any computers found within the distinguished name path that is defined using the -OUPath parameter.
     
  .AUTHOR
-    Sir Addison
+    Sir Addison / Eric Jansen
  #>
 
 function Get-AutoRuns
 {
     [CmdletBinding(DefaultParameterSetName=’ComputerName’)]
-    [Alias('GAA')]
+    [Alias('GAR')]
     Param
     (
         # The input for this parameter is the Computer hostname to which you want to collect Auto Run data.
@@ -40,7 +40,7 @@ function Get-AutoRuns
                    ValueFromPipelineByPropertyName=$true,
                    Position=0,
                    ParameterSetName=’ComputerName’)]            
-        [array]$ComputerName = $env:COMPUTERNAME,
+        [array]$Computer = $env:COMPUTERNAME,
 
         [Parameter(Mandatory=$false,
                    Position=0,
@@ -51,57 +51,142 @@ function Get-AutoRuns
         [Parameter(Mandatory=$false,
                    Position=1)]
         # Path on the computer where you would like the output file.
-        $OutputPath = "$env:USERPROFILE\Desktop\AutoRuns.csv"        
+        $OutputPath = "$env:USERPROFILE\Desktop\AutoRuns.csv"                
 )
+$i = 0
 
-If($OUPath){$ComputerName = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+$OutputPathRoot = $($OutputPath.split("\")[0..$($($OutputPath.split("\")).count - 2)]  -Join "\")
 
-$DataSets =@()
-foreach ($thing in $ComputerName){
-    $command ={
-        try{
-            #Registry Keys in which the script is looking for autorun applications.
-            $keys = @(
-                'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\privacy',
-                "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\BootExecute",
-                "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Notify",
-                "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\Userinit",
-                "HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\\Shell",
-                "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\\Shell",
-                "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad",
-                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\",
-                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce\",
-                "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\",
-                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnceEx\",
-                "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce\",
-                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run\",
-                "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run\",
-                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServices\",
-                "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServices",
-                "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServicesOnce",
-                "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServicesOnce",
-                "HKCU\Software\Microsoft\Windows NT\CurrentVersion\Windows\load",
-                "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Windows",
-                "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SharedTaskScheduler",
-                "HKLM\Software\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_DLLs")
+$command = {
+    try{
+        #Registry Keys in which the script is looking for autorun applications.
+        #https://threatvector.cylance.com/en_us/home/windows-registry-persistence-part-2-the-run-keys-and-search-order.html
+        $Keys = 
+        
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\privacy",
+        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Notify",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce\",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnceEx\",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce\",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run\",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run\",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServices\",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServices",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServicesOnce",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServicesOnce",
+        "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows\load",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SharedTaskScheduler"
 
-                 $keys | Foreach {((Get-Item $_ -ErrorAction Ignore))}| select property -ExpandProperty Property
+        $Data = @() 
+        Foreach($Key in $Keys){
+        $KeyData = Get-Item $Key -ErrorAction Ignore
+            If ($KeyData.Property -ne $null){
+            $PropertyValues = $KeyData.Property
+                
+                If($PropertyValues -gt 1){
+                    Foreach($Property in $PropertyValues){
+                    $Data += New-Object psobject -Property @{Property = $Property;Value = (Get-ItemProperty $Key -Name $Property).$Property;Key = $Key}
+                    }
+                }
+                Else{$Data += New-Object psobject -Property @{Property = $PropertyValues;Value = (Get-ItemProperty $Key -Name $PropertyValues).$PropertyValues; Key = $Key}}  
+            }
         }
-        catch{<#add error catch messages here... on my to do list#>}
+
+        $Data += New-Object psobject -Property @{Property = "BootExecute";Value = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name BootExecute -ErrorAction Ignore | select -ExpandProperty BootExecute; Key = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"}
+        $Data += New-Object psobject -Property @{Property = "Userinit";Value = Get-ItemProperty "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name Userinit -ErrorAction Ignore | select -ExpandProperty Userinit; Key = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"}
+        $Data += New-Object psobject -Property @{Property = "Shell";Value = Get-ItemProperty "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name Shell -ErrorAction Ignore | select -ExpandProperty Shell; Key = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"}
+        $Data += New-Object psobject -Property @{Property = "Shell";Value = Get-ItemProperty "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name shell -ErrorAction Ignore | select -ExpandProperty Shell; Key = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"}
+        $Data += New-Object psobject -Property @{Property = "AppInit_DLLs";Value = Get-ItemProperty "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Windows" -Name AppInit_DLLs -ErrorAction Ignore | select -ExpandProperty AppInit_DLLs; Key = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Windows"}
+        $Data
+
     }
-
-    $AppData = @()
-    $AppData = New-Object -TypeName psobject
-    $AppData | Add-Member -MemberType NoteProperty -Name exe -Value (Invoke-Command -ComputerName $thing -ScriptBlock $command)
-    $AppData = $AppData | Select-Object exe -ExpandProperty exe
-    #somehow here or below in the $datasets I am trying to add in the actual path in the registry.
-
-    $DataSets+= @(
-    Foreach ($Application in $AppData){
-        New-Object PSObject -Property @{ComputerName=$thing;
-        'AutoRun Application'=$Application}
-        }
-    )
+    catch{$_}
 }
-$DataSets | Export-Csv $OutputPath -NoTypeInformation
+
+$JobInfo = @()
+
+    Try{
+
+        If($OUPath){$Computers = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+        Else{$Computers = $Computer}
+
+        Foreach($Comp in $Computers){
+        $i++        
+        Write-Progress -Activity "Starting Remote Job on $comp" -Status "Progress:" -PercentComplete ($i/$Computers.count*100) 
+        $JobInfo += Invoke-Command -ComputerName $Comp -AsJob -ScriptBlock $command
+        }
+
+        }   
+    Catch{$_}  
+    $AutoRunsInfo = @()  
+    $j = 0   
+    $KilledJobs = @() 
+    #Only Starting Sleep for a second because the Write-Progress using the -Completed parameter completely kills the Progress bar if there's only a small amount of machines, since the loop runs so fast. 
+    #It kills the bar before it's even presented to the screen. If you're running jobs agains a large number of machines this isn't an issue.   
+    
+    Start-Sleep 1    
+    Write-Progress -Activity "Job Disbursement Complete" -Completed   
+    
+    <#
+    Collect all of the jobs to see which ones are still running and present a count. 
+    For each job that it finds running, it checks the start time of the job. If the job has been running for more than 60 minutes, it kills job.   
+    Each time it goes through the loop, it goes to sleep for 20 seconds before checking everything all over again.  
+    Once there no more running jobs, it moves on.
+    #>
+    
+    Do{        
+    Write-Host "Still have" $(Get-Job | where State -eq "Running").count "job(s) running.."                  
+        If($(Get-Job | where State -eq "Running")){
+        $RunninngJobs = Get-Job | where State -eq "Running"
+        }   
+        
+        Foreach($Job in $RunninngJobs){
+        
+        If($(Get-Date ($Job).PSBeginTime).AddMinutes("60") -lt $(Get-Date)){
+        
+        $Job | Stop-Job
+        $Job | Remove-Job
+        $KilledJobs += $Job
+        $Job = $null
+        }
+        
+    }
+    Start-Sleep -Seconds 20
+    
+    }
+    Until((get-job).State -notcontains "Running")
+
+    Write-Host     
+    Write-Host "Jobs completed Running!" -ForegroundColor Green
+    Write-Host "Collecting data from the jobs now.."  
+    Write-Host     
+    Write-Host "The data can be retrieved here:"  $OutputPath   
+    
+    Foreach($Job in $JobInfo){    
+    
+    $JobStatus = Get-Job $Job.ID       
+    
+        If($JobStatus.State -eq "Completed"){   
+        $AutoRunsInfo += Receive-Job $Job.ID     
+        $Job.Location | Out-File $($OutputPathRoot + "\AutoRuns_FailedCompletedJobs.txt") -Append     
+        Remove-Job $Job.ID                      
+        
+        }
+        Elseif($JobStatus.State -eq "Failed"){ 
+        $Job.Location | Out-File $($OutputPathRoot + "\AutoRuns_FailedJobs.txt") -Append  
+        Remove-Job $Job.ID                      
+        }   
+        
+    $Job = $null  
+    }
+        
+    ForEach($Job in $KilledJobs){ 
+    $Job.Location | Out-File $($OutputPathRoot + "\AutoRuns_KilledJobs.txt") -Append  
+    }
+    
+    Write-Host "Failed, Killed, and Completed jobs can be retrieved here:" $OutputPathRoot 
+    $AutoRunsInfo | select PSComputerName,Property, Value, Key | export-csv $OutputPath -NoTypeInformation
 }
