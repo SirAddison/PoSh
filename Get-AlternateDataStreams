@@ -1,0 +1,165 @@
+<#
+.Synopsis
+    Finds Alternate Data Streams on workstations or servers.
+
+.DESCRIPTION
+    See Above.
+    
+.EXAMPLE
+    Get-AlternateDataStreams -Computer <Computer Name> 
+       
+    This example will find alternate data streams under all user profiles on a single computer. Note: There will be an output file will be dumped to the desktop by default and called AlternateDataStreams.csv.
+          
+.EXAMPLE
+    Get-AlternateDataStreams -Computer <Computer Name, Computer Name> -OutputPath "AlternateDataStreams.csv"
+          
+    This example will find alternate data streams under all user profiles on each computer and will output the csv file to "c:\ AlternateDataStreams.csv" defined by the OutputPath parameter above.
+          
+.EXAMPLE
+    Get-AlternateDataStreams -Computer $(Get-Content C:\computers.txt) 
+    
+    This example will find alternate data streams under all user profiles on multiple computers that are imported from a file.
+        
+.EXAMPLE
+    Get-AlternateDataStreams -OUPath <"OU=Computers,DC=Domain,DC=Com"> 
+    
+    This example will find alternate data streams under all user profiles on all computers found within the distinguished name path that is defined using the -OUPath parameter.
+    
+.EXAMPLE
+    Get-AlternateDataStreams -Computer <Computer Name> -ScanLocation EntireComputer
+       
+    This example will search the c:\ recursively for alternate data streams under on a single computer. Note: There will be an output file will be dumped to the desktop by default and called AlternateDataStreams.csv.
+        
+ .AUTHOR
+    Sir Addison 
+ #>
+
+function Get-AlternateDataStreams
+{
+    [CmdletBinding(DefaultParameterSetName=’ComputerName’)]
+    [Alias('GADS')]
+    Param
+    (
+        # The input for this parameter is the Computer hostname to which you want to collect Auto Run data.
+        [Parameter(Mandatory=$false,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0,
+                   ParameterSetName=’ComputerName’)]            
+        [array]$Computer = $env:COMPUTERNAME,
+
+        [Parameter(Mandatory=$false,
+                   Position=0,
+                   ParameterSetName=’OUPath’)]
+        # Distinguished Name path of which Organizational Unit you would like to find computers in.
+        $OUPath,
+
+        [Parameter(Mandatory=$false,
+                   Position=1)]
+        # Path on the computer where you would like the output file.
+        $OutputPath = "$env:USERPROFILE\Desktop\AlternateDataStreams.csv"                
+)
+
+DynamicParam{
+    
+    $Attributes = New-Object System.Management.Automation.ParameterAttribute
+    $Attributes.ParameterSetName = '__AllParameterSets'
+    $Attributes.Mandatory = $false
+    $AttributeCollection = New-Object -Type System.Collections.ObjectModel.Collection[System.Attribute]
+    $AttributeCollection.Add($Attributes)
+    
+    $Values ="EntireComputer"
+    
+    $ValidateSet = New-Object System.Management.Automation.ValidateSetAttribute($Values)
+    $AttributeCollection.Add($ValidateSet)
+
+    $DynParam = New-Object -Type System.Management.Automation.RuntimeDefinedParameter("ScanLocation", [string], $attributeCollection)
+
+    $ParamDictionary = New-Object -Type System.Management.Automation.RuntimeDefinedParameterDictionary
+    $ParamDictionary.Add("ScanLocation", $DynParam)
+
+    return $ParamDictionary
+
+    }
+
+    Process{
+    $ScanLocation = $PSBoundParameters.ScanLocation
+    $i = 0
+    $OutputPathRoot = $($OutputPath.split("\")[0..$($($OutputPath.split("\")).count - 2)]  -Join "\")
+
+    If($OUPath){$Computers = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+    Else{$Computers = $Computer}   
+
+    foreach($comp in $Computers){
+        try{
+            $WSManCheck = Test-WSMan -Computer $comp -ErrorAction SilentlyContinue 
+            }
+        catch{}      
+    }
+
+    # This command searches the entire C:\ drive recursively
+    $ComputerCommand = {
+        $ItemsByName = (Get-ChildItem -path 'C:\*' -Recurse -ErrorAction Ignore).FullName 
+ 
+        $StreamData = $ItemsByName | ForEach-Object{
+            try{
+                if(Get-Item $_ -Stream * -ErrorAction Ignore){
+                    get-item $_ -stream * | where stream -ne ':$Data'
+                }    
+            }
+            catch{}
+        }   
+        
+    $Data = @()
+    foreach($object in $StreamData){
+        $Data += New-Object psobject -Property @{Stream = $object.stream;Length = $object.Length;FileName = $object.FileName}
+    }
+    $Data 
+    }
+       
+    # This command only searches through the path of C:\User recursively      
+    $command = {
+    $ItemsByName = (Get-ChildItem -path 'C:\Users' -Recurse -ErrorAction Ignore).FullName 
+ 
+    $StreamData = $ItemsByName | ForEach-Object{
+        try{
+            if(Get-Item $_ -Stream * -ErrorAction Ignore){
+                get-item $_ -stream * | where stream -ne ':$Data'
+            }    
+        }
+        catch{}
+    }   
+                       
+    $Data = @()
+    foreach($object in $StreamData){
+        $Data += New-Object psobject -Property @{Stream = $object.stream;Length = $object.Length;FileName = $object.FileName}
+    }
+    $Data 
+    }
+            
+    $JobInfo = @()
+
+        Try{
+            if($WSManCheck){                         
+                if($ScanLocation -eq "EntireComputer"){ 
+                    Foreach($Comp in $Computers){
+                        $i++        
+                        Write-Progress -Activity "Starting Remote Job on $comp" -Status "Progress:" -PercentComplete ($i/$Computers.count*100)
+                        $JobInfo += Invoke-Command -ComputerName $Comp -AsJob -ScriptBlock $ComputerCommand
+                    }
+                }                else{                    Foreach($Comp in $Computers){
+                        $i++        
+                        Write-Progress -Activity "Starting Remote Job on $comp" -Status "Progress:" -PercentComplete ($i/$Computers.count*100)
+                        $JobInfo += Invoke-Command -ComputerName $Comp -AsJob -ScriptBlock $Command
+                    }
+                }            }        }        Catch{$_}                $ADSInfo = @()        $j = 0        $KilledJobs = @()        #Only Starting Sleep for a second because the Write-Progress using the -Completed parameter completely kills the Progress bar if there's only a small amount of machines, since the loop runs so fast.        #It kills the bar before it's even presented to the screen. If you're running jobs agains a large number of machines this isn't an issue.        #Start-Sleep 1        Write-Progress -Activity "Job Disbursement Complete" -Completed        <#
+        Collect all of the jobs to see which ones are still running and present a count.          For each job that it finds running, it checks the start time of the job.  If the job has been running for more than 60 minutes, it kills job.        Each time it goes through the loop, it goes to sleep for 20 seconds before checking everything all over again.        Once there no more running jobs, it moves on.
+        #>
+
+        Do{            Write-Host "Still have" $(Get-Job | where State -eq "Running").count "job(s) running.."                      If($(Get-Job | where State -eq "Running")){            $RunninngJobs = Get-Job | where State -eq "Running"            }                              Foreach($Job in $RunninngJobs){                                If($(Get-Date ($Job).PSBeginTime).AddMinutes("60") -lt $(Get-Date)){                                        $Job | Stop-Job                $Job | Remove-Job                $KilledJobs += $Job                $Job = $null                }                                                    }            Start-Sleep -Seconds 20                         }        Until((get-job).State -notcontains "Running")
+
+        Write-Host         Write-Host "Jobs completed Running!" -ForegroundColor Green        Write-Host "Collecting data from the jobs now.."        Write-Host          Write-Host "The data can be retrieved here:" $OutputPath                               Foreach($Job in $JobInfo){                    $JobStatus = Get-Job $Job.ID            If($JobStatus.State -eq "Completed"){            $ADSInfo += Receive-Job $Job.ID            $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_FailedCompletedJobs.txt") -Append            Remove-Job $Job.ID                            }            Elseif($JobStatus.State -eq "Failed"){            $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_FailedJobs.txt") -Append            Remove-Job $Job.ID                            }        $Job = $null            }        ForEach($Job in $KilledJobs){        $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_KilledJobs.txt") -Append        }        Write-Host "Failed, Killed, and Completed jobs can be retrieved here:" $OutputPathRoot        $ADSInfo | select PSComputerName,Stream, Length, FileName | export-csv $OutputPath -NoTypeInformation
+    }
+    
+}
+    
+
