@@ -151,15 +151,78 @@ DynamicParam{
                         Write-Progress -Activity "Starting Remote Job on $comp" -Status "Progress:" -PercentComplete ($i/$Computers.count*100)
                         $JobInfo += Invoke-Command -ComputerName $Comp -AsJob -ScriptBlock $Command
                     }
-                }            }        }        Catch{$_}                $ADSInfo = @()        $j = 0        $KilledJobs = @()        #Only Starting Sleep for a second because the Write-Progress using the -Completed parameter completely kills the Progress bar if there's only a small amount of machines, since the loop runs so fast.        #It kills the bar before it's even presented to the screen. If you're running jobs agains a large number of machines this isn't an issue.        #Start-Sleep 1        Write-Progress -Activity "Job Disbursement Complete" -Completed        <#
-        Collect all of the jobs to see which ones are still running and present a count.          For each job that it finds running, it checks the start time of the job.  If the job has been running for more than 60 minutes, it kills job.        Each time it goes through the loop, it goes to sleep for 20 seconds before checking everything all over again.        Once there no more running jobs, it moves on.
+                }
+            }        
+        }        
+        Catch{$_}
+        
+        $ADSInfo = @() 
+        $j = 0        
+        $KilledJobs = @()   
+        
+        #Only Starting Sleep for a second because the Write-Progress using the -Completed parameter completely kills the Progress bar if there's only a small amount of machines, since the loop runs so fast.
+        #It kills the bar before it's even presented to the screen. If you're running jobs agains a large number of machines this isn't an issue. 
+        #Start-Sleep 1       
+        Write-Progress -Activity "Job Disbursement Complete" -Completed   
+        
+        <#
+        Collect all of the jobs to see which ones are still running and present a count.   
+        For each job that it finds running, it checks the start time of the job.  If the job has been running for more than 60 minutes, it kills job.  
+        Each time it goes through the loop, it goes to sleep for 20 seconds before checking everything all over again.    
+        Once there no more running jobs, it moves on.
         #>
 
-        Do{            Write-Host "Still have" $(Get-Job | where State -eq "Running").count "job(s) running.."                      If($(Get-Job | where State -eq "Running")){            $RunninngJobs = Get-Job | where State -eq "Running"            }                              Foreach($Job in $RunninngJobs){                                If($(Get-Date ($Job).PSBeginTime).AddMinutes("60") -lt $(Get-Date)){                                        $Job | Stop-Job                $Job | Remove-Job                $KilledJobs += $Job                $Job = $null                }                                                    }            Start-Sleep -Seconds 20                         }        Until((get-job).State -notcontains "Running")
+        Do{       
+        Write-Host "Still have" $(Get-Job | where State -eq "Running").count "job(s) running.."   
+        
+            If($(Get-Job | where State -eq "Running")){   
+            $RunninngJobs = Get-Job | where State -eq "Running"        
+            }                             
+            
+            Foreach($Job in $RunninngJobs){         
+                If($(Get-Date ($Job).PSBeginTime).AddMinutes("60") -lt $(Get-Date)){  
+                
+                $Job | Stop-Job           
+                $Job | Remove-Job          
+                $KilledJobs += $Job        
+                $Job = $null              
+                }                             
+            }           
+            Start-Sleep -Seconds 20   
+            
+        }       
+        Until((get-job).State -notcontains "Running")
 
-        Write-Host         Write-Host "Jobs completed Running!" -ForegroundColor Green        Write-Host "Collecting data from the jobs now.."        Write-Host          Write-Host "The data can be retrieved here:" $OutputPath                               Foreach($Job in $JobInfo){                    $JobStatus = Get-Job $Job.ID            If($JobStatus.State -eq "Completed"){            $ADSInfo += Receive-Job $Job.ID            $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_FailedCompletedJobs.txt") -Append            Remove-Job $Job.ID                            }            Elseif($JobStatus.State -eq "Failed"){            $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_FailedJobs.txt") -Append            Remove-Job $Job.ID                            }        $Job = $null            }        ForEach($Job in $KilledJobs){        $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_KilledJobs.txt") -Append        }        Write-Host "Failed, Killed, and Completed jobs can be retrieved here:" $OutputPathRoot        $ADSInfo | select PSComputerName,Stream, Length, FileName | export-csv $OutputPath -NoTypeInformation
-    }
-    
+        Write-Host     
+        Write-Host "Jobs completed Running!" -ForegroundColor Green  
+        Write-Host "Collecting data from the jobs now.."       
+        Write-Host         
+        Write-Host "The data can be retrieved here:" $OutputPath      
+        
+        Foreach($Job in $JobInfo){                  
+            
+            $JobStatus = Get-Job $Job.ID       
+            
+                If($JobStatus.State -eq "Completed"){  
+                $ADSInfo += Receive-Job $Job.ID          
+                $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_FailedCompletedJobs.txt") -Append  
+                Remove-Job $Job.ID     
+                
+                }           
+                Elseif($JobStatus.State -eq "Failed"){   
+                $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_FailedJobs.txt") -Append   
+                Remove-Job $Job.ID                      
+                }      
+            $Job = $null    
+            }        
+            
+            ForEach($Job in $KilledJobs){  
+            $Job.Location | Out-File $($OutputPathRoot + "\AlternateDataStreams_KilledJobs.txt") -Append      
+            }        
+            
+            Write-Host "Failed, Killed, and Completed jobs can be retrieved here:" $OutputPathRoot       
+            $ADSInfo | select PSComputerName,Stream, Length, FileName | export-csv $OutputPath -NoTypeInformation
+    }   
 }
     
 
