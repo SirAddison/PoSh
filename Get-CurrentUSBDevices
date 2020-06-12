@@ -35,7 +35,7 @@ function Get-CurrentUSBDevices
                    Position=0,
                    ParameterSetName="ComputerName")]  
 
-        [array]$ComputerName = $env:COMPUTERNAME,
+        [array]$Computer = $env:COMPUTERNAME,
 
         [Parameter(Mandatory=$true,
                    Position=0,
@@ -46,38 +46,34 @@ function Get-CurrentUSBDevices
         [Parameter(Mandatory=$false,
                    Position=1)]
         # Path on the computer where you would like the output file.
-        $OutputPath = "$env:USERPROFILE\Desktop\usb.csv"
+        $OutputPath = "$env:USERPROFILE\Desktop\CurrentUSBDevices.csv"
 
 )
 
+$OutputPathRoot = $($OutputPath.split("\")[0..$($($OutputPath.split("\")).count - 2)]  -Join "\")
+
+
         If($OUPath){$ComputerName = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
 
-    $Obj=@()
-    $j = 0
-    foreach ($comp in $ComputerName){
+$command = {
 
-        $j++
-        Write-Progress -Activity "Scanning Computers $comp" -Status "Progress:" -PercentComplete ($j/$ComputerName.count*100)
+   $Obj=@()
 
         $objs = New-Object -TypeName psobject
-        $objs | Add-Member -MemberType NoteProperty -Name USB -Value (Get-WmiObject Win32_USBControllerDevice -ComputerName $comp).dependent
-
+        $objs | Add-Member -MemberType NoteProperty -Name USB -Value (Get-WmiObject Win32_USBControllerDevice).dependent
 
         $i = 0
 
         $obj+= @(
         Foreach ($USB in $objs.USB){
 
-            New-Object PSObject -Property @{UserName=(Get-WmiObject -Class win32_computersystem -ComputerName $comp).UserName;
-            ComputerName=(Get-WmiObject -Class win32_computersystem -ComputerName $comp).Name;
-            Description=([wmi](Get-WmiObject -class Win32_USBControllerDevice -computername $comp -Property dependent).dependent[$i]).description;
+            New-Object PSObject -Property @{UserName=(Get-WmiObject -Class win32_computersystem).UserName;
+            ComputerName=(Get-WmiObject -Class win32_computersystem).Name;
+            Description=([wmi](Get-WmiObject -class Win32_USBControllerDevice -Property dependent).dependent[$i]).description;
             USB=$USB}
             $i++
         }
         )
-
-    }
-
 
     $obj | 
 
@@ -88,10 +84,95 @@ function Get-CurrentUSBDevices
             ($_.Description -ne "HID Keyboard Device") -and
             ($_.Description -ne "OMNIKEY 3x21") -and 
             ($_.Description -ne "HID-compliant mouse") -and
-            ($_.Description -ne "Microsoft Usbccid Smartcard Reader (WUDF)") } |
+            ($_.Description -ne "Microsoft Usbccid Smartcard Reader (WUDF)") } 
         
             #ft Description, ComputerName, UserName, USB 
-            Export-Csv -Path $OutputPath -NoTypeInformation 
+            #Export-Csv -Path $OutputPath -NoTypeInformation 
+
+    }
 
 
+$JobInfo = @()
+
+    Try{
+
+        If($OUPath){$Computers = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+        Else{$Computers = $Computer}
+
+        Foreach($Comp in $Computers){
+        $ii++        
+        Write-Progress -Activity "Starting Remote Job on $comp" -Status "Progress:" -PercentComplete ($ii/$Computers.count*100) 
+        $JobInfo += Invoke-Command -ComputerName $Comp -AsJob -ScriptBlock $command
+        }
+
+        }   
+    Catch{$_}  
+    $USBInfo = @()  
+    $j = 0   
+    $KilledJobs = @() 
+    #Only Starting Sleep for a second because the Write-Progress using the -Completed parameter completely kills the Progress bar if there's only a small amount of machines, since the loop runs so fast. 
+    #It kills the bar before it's even presented to the screen. If you're running jobs agains a large number of machines this isn't an issue.   
+    
+    Start-Sleep 1    
+    Write-Progress -Activity "Job Disbursement Complete" -Completed   
+    
+    <#
+    Collect all of the jobs to see which ones are still running and present a count. 
+    For each job that it finds running, it checks the start time of the job. If the job has been running for more than 60 minutes, it kills job.   
+    Each time it goes through the loop, it goes to sleep for 20 seconds before checking everything all over again.  
+    Once there no more running jobs, it moves on.
+    #>
+    
+    Do{        
+    Write-Host "Still have" $(Get-Job | where State -eq "Running").count "job(s) running.."                  
+        If($(Get-Job | where State -eq "Running")){
+        $RunninngJobs = Get-Job | where State -eq "Running"
+        }   
+        
+        Foreach($Job in $RunninngJobs){
+        
+        If($(Get-Date ($Job).PSBeginTime).AddMinutes("60") -lt $(Get-Date)){
+        
+        $Job | Stop-Job
+        $Job | Remove-Job
+        $KilledJobs += $Job
+        $Job = $null
+        }
+        
+    }
+    Start-Sleep -Seconds 20
+    
+    }
+    Until((get-job).State -notcontains "Running")
+
+    Write-Host     
+    Write-Host "Jobs completed Running!" -ForegroundColor Green
+    Write-Host "Collecting data from the jobs now.."  
+    Write-Host     
+    Write-Host "The data can be retrieved here:"  $OutputPath   
+    
+    Foreach($Job in $JobInfo){    
+    
+    $JobStatus = Get-Job $Job.ID       
+    
+        If($JobStatus.State -eq "Completed"){   
+        $USBInfo += Receive-Job $Job.ID     
+        $Job.Location | Out-File $($OutputPathRoot + "\USBInfo_FailedCompletedJobs.txt") -Append     
+        Remove-Job $Job.ID                      
+        
+        }
+        Elseif($JobStatus.State -eq "Failed"){ 
+        $Job.Location | Out-File $($OutputPathRoot + "\USBInfo_FailedJobs.txt") -Append  
+        Remove-Job $Job.ID                      
+        }   
+        
+    $Job = $null  
+    }
+        
+    ForEach($Job in $KilledJobs){ 
+    $Job.Location | Out-File $($OutputPathRoot + "\USBInfo_KilledJobs.txt") -Append  
+    }
+    
+    Write-Host "Failed, Killed, and Completed jobs can be retrieved here:" $OutputPathRoot 
+    $USBInfo | export-csv $OutputPath -NoTypeInformation
 }
