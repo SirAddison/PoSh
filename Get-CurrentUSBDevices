@@ -85,10 +85,6 @@ $command = {
             ($_.Description -ne "OMNIKEY 3x21") -and 
             ($_.Description -ne "HID-compliant mouse") -and
             ($_.Description -ne "Microsoft Usbccid Smartcard Reader (WUDF)") } 
-        
-            #ft Description, ComputerName, UserName, USB 
-            #Export-Csv -Path $OutputPath -NoTypeInformation 
-
     }
 
 
@@ -144,7 +140,6 @@ $JobInfo = @()
     
     }
     Until((get-job).State -notcontains "Running")
-
     Write-Host     
     Write-Host "Jobs completed Running!" -ForegroundColor Green
     Write-Host "Collecting data from the jobs now.."  
