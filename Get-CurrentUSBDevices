@@ -140,6 +140,7 @@ $JobInfo = @()
     
     }
     Until((get-job).State -notcontains "Running")
+    
     Write-Host     
     Write-Host "Jobs completed Running!" -ForegroundColor Green
     Write-Host "Collecting data from the jobs now.."  
