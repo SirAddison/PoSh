@@ -1,0 +1,196 @@
+<#
+.Synopsis
+   Finds unsigned DLLs on 64-bit and 32-bit systems within the C:\Windows\* directory.
+
+.DESCRIPTION
+   see above
+
+.EXAMPLE
+   Get-UnsignedDLLs -ComputerName <Computer Name> 
+
+   This example will find unsigned DLLs on 64-bit and 32-bit systems within the C:\Windows\* directory on a single computer. Note: The output file will be dumped to the desktop by default and called UnsignedDLLs.csv.
+
+.EXAMPLE
+   Get-UnsignedDLLs -ComputerName <Computer Name, Computer Name> -OutputPath "c:\UnsignedDLLs.csv"
+
+   This example will find unsigned DLLs on 64-bit and 32-bit systems within the C:\Windows\* directory on multiple computers and will output the csv file to "c:\UnsignedDLLs.csv" defined by the OutputPath parameter above.
+
+.EXAMPLE
+   Get-UnsignedDLLs -ComputerName $(Get-Content C:\computers.txt) 
+
+   This example will find unsigned DLLs on 64-bit and 32-bit systems within the C:\Windows\* directory on multiple computers that are imported from a file.
+   
+.AUTHOR
+   Sir Addison 
+   
+#>
+
+function Get-UnsignedDLLs
+{
+    [CmdletBinding(DefaultParameterSetName="ComputerName")]
+    [Alias('GUDLL')]
+    Param
+    (
+        # The input for this parameter is the Computer hostname to which you want to collect DLL data.
+        [Parameter(Mandatory=$false,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0,
+                   ParameterSetName="ComputerName")]  
+
+        [array]$Computer = $env:COMPUTERNAME,
+
+        [Parameter(Mandatory=$true,
+                   Position=0,
+                   ParameterSetName="OUPath")]
+        # Distinguished Name path of which Organizational Unit you would like to find computers in.
+        $OUPath,
+
+        [Parameter(Mandatory=$false,
+                   Position=1)]
+        # Path on the computer where you would like the output file.
+        $OutputPath = "$env:USERPROFILE\Desktop\UnsignedDLLs.csv"
+
+)
+
+$OutputPathRoot = $($OutputPath.split("\")[0..$($($OutputPath.split("\")).count - 2)]  -Join "\")
+
+If($OUPath){$ComputerName = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+
+$command = { 
+
+    #Identifies if system is 32-bit or 64-bit
+    if ((gwmi win32_operatingsystem | select osarchitecture).osarchitecture -eq "64-bit"){
+        
+        #DLLs in 64-bit systems are located in the SysWOW64 directory.
+        $dll = @()
+        
+        $dll += (Get-ChildItem -path C:\windows\SysWOW64 -File '*dll' -Recurse).FullName
+        
+        $SignatureStatus = (Get-AuthenticodeSignature -FilePath $dll | Where-Object {$_.Status -ne "valid"})
+           
+        $dllpath = ($SignatureStatus).path
+
+        $data = @()
+        foreach($thing in $dllpath){
+   
+            $Data += New-Object psobject -Property @{DLL = $thing;Value = (get-filehash $thing)}
+        }
+
+        $data.value | 
+        
+            #Filter out normal dll hashes
+            Where-Object -FilterScript{
+                ($_.hash -ne "CBCC91AA0AC78F4763DA757A518944E88C8BE4E0E22DD2387B6F4F2DE6558858")
+            }
+    }
+
+    else{
+        
+        #DLLs in 32-bit systems are located in the System32 directory
+        $dll = @()
+        $dll += (Get-ChildItem -path C:\Windows\System32 -File '*dll' -recurse).FullName
+        
+        $SignatureStatus = (Get-AuthenticodeSignature -FilePath $dll | Where-Object {$_.Status -ne "valid"})
+           
+        $dllpath = ($SignatureStatus).path
+
+        $data = @()
+        foreach($thing in $dllpath){
+   
+            $Data += New-Object psobject -Property @{DLL = $thing;Value = (get-filehash $thing)}
+        }
+
+        $data.value | 
+    
+            Where-Object -FilterScript{
+                #($_.hash -ne "CBCC91AA0AC78F4763DA757A518944E88C8BE4E0E22DD2387B6F4F2DE6558858")
+                
+            }
+    }
+}
+
+
+$JobInfo = @()
+
+    Try{
+
+        If($OUPath){$Computers = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+        Else{$Computers = $Computer}
+
+        Foreach($Comp in $Computers){
+        $ii++        
+        Write-Progress -Activity "Starting Remote Job on $comp" -Status "Progress:" -PercentComplete ($ii/$Computers.count*100) 
+        $JobInfo += Invoke-Command -ComputerName $Comp -AsJob -ScriptBlock $command
+        }
+
+        }   
+    Catch{$_}  
+    $DLLInfo = @()  
+    $j = 0   
+    $KilledJobs = @() 
+    #Only Starting Sleep for a second because the Write-Progress using the -Completed parameter completely kills the Progress bar if there's only a small amount of machines, since the loop runs so fast. 
+    #It kills the bar before it's even presented to the screen. If you're running jobs agains a large number of machines this isn't an issue.   
+    
+    Start-Sleep 1    
+    Write-Progress -Activity "Job Disbursement Complete" -Completed   
+    
+    <#
+    Collect all of the jobs to see which ones are still running and present a count. 
+    For each job that it finds running, it checks the start time of the job. If the job has been running for more than 60 minutes, it kills job.   
+    Each time it goes through the loop, it goes to sleep for 20 seconds before checking everything all over again.  
+    Once there no more running jobs, it moves on.
+    #>
+    
+    Do{        
+    Write-Host "Still have" $(Get-Job | where State -eq "Running").count "job(s) running.."                  
+        If($(Get-Job | where State -eq "Running")){
+        $RunninngJobs = Get-Job | where State -eq "Running"
+        }   
+        
+        Foreach($Job in $RunninngJobs){
+        
+        If($(Get-Date ($Job).PSBeginTime).AddMinutes("60") -lt $(Get-Date)){
+        
+        $Job | Stop-Job
+        $Job | Remove-Job
+        $KilledJobs += $Job
+        $Job = $null
+        }
+        
+    }
+    Start-Sleep -Seconds 20
+    
+    }
+    Until((get-job).State -notcontains "Running")
+    
+    Write-Host     
+    Write-Host "Jobs completed Running!" -ForegroundColor Green
+    Write-Host "Collecting data from the jobs now.."  
+    Write-Host     
+    Write-Host "The data can be retrieved here:"  $OutputPath   
+    
+    Foreach($Job in $JobInfo){    
+    
+    $JobStatus = Get-Job $Job.ID       
+    
+        If($JobStatus.State -eq "Completed"){   
+        $DLLInfo += Receive-Job $Job.ID     
+        $Job.Location | Out-File $($OutputPathRoot + "\DLL_FailedCompletedJobs.txt") -Append     
+        Remove-Job $Job.ID                      
+        
+        }
+        Elseif($JobStatus.State -eq "Failed"){ 
+        $Job.Location | Out-File $($OutputPathRoot + "\DLL_FailedJobs.txt") -Append  
+        Remove-Job $Job.ID                      
+        }   
+        
+    $Job = $null  
+    }
+        
+    ForEach($Job in $KilledJobs){ 
+    $Job.Location | Out-File $($OutputPathRoot + "\DLL_KilledJobs.txt") -Append  
+    }
+    
+    Write-Host "Failed, Killed, and Completed jobs can be retrieved here:" $OutputPathRoot 
+    $DLLInfo | Select-Object PSComputerName, Path, Hash | export-csv $OutputPath -NoTypeInformation
+}
