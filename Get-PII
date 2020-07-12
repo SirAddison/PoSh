@@ -4,7 +4,7 @@ function Get-PII{
  .SYNOPSIS
   ---------------------------------------------------------------------------------------------
 
-  SHOULD NOT BE RAN AS ADMIN IN ORDER TO DETECT UNSECURED PII
+  SHOULD NOT BE RAN AS ADMIN (ELEVATED) IN ORDER TO DETECT UNSECURED PII
 
   ---------------------------------------------------------------------------------------------
 
@@ -37,7 +37,7 @@ function Get-PII{
 
   ---------------------------------------------------------------------------------------------
 
-  SHOULD NOT BE RAN AS ADMIN IN ORDER TO DETECT UNSECURED PII
+  SHOULD NOT BE RAN AS ADMIN (ELEVATED) IN ORDER TO DETECT UNSECURED PII
 
   ---------------------------------------------------------------------------------------------
 
