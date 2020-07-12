@@ -1,5 +1,4 @@
-function Get-CurrentUSBDevices
-{
+function Get-CurrentUSBDevices{
 
 <#
 .SYNOPSIS
