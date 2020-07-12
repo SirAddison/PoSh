@@ -1,8 +1,12 @@
+function Get-CurrentUSBDevices{
+
 <#
-.Synopsis
+.SYNOPSIS
    Finds plugged in USB Devices
+
 .DESCRIPTION
    see above
+
 .EXAMPLE
    Get-CurrentUSBDevices -ComputerName <Computer Name> 
 
@@ -18,13 +22,12 @@
 
    This example will find USB devices currently plugged into multiple computers that are imported from a file.
    
-.AUTHOR
+.NOTES
    Sir Addison 
    
 #>
 
-function Get-CurrentUSBDevices
-{
+
     [CmdletBinding(DefaultParameterSetName="ComputerName")]
     [Alias('GCUD')]
     Param
