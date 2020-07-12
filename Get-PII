@@ -1,0 +1,97 @@
+function Get-PII{
+<# 
+
+ .SYNOPSIS
+  Function to report on files containing Personally Identifiable Information (PII)
+
+ .DESCRIPTION
+  Function produces an CSV report of files of certain extensions in certain folders, 
+  that contain PII such as social security numbers and credit card card numbers. 
+
+ .PARAMETER TargetFolder 
+  Folder(s) to search in. 
+  Examples: "c:\support" or "d:\sandbox" or "\\server11\share\sales" 
+
+ .EXAMPLE 
+  Get-PII
+
+  This example produces a report on files on the users Desktop that contain PII, 
+  and will output the csv file to users desktop labled "Potential PII Report.csv"
+
+ .EXAMPLE 
+  Get-PII -TargetFolder "\\server11\share\sales" -OutputPath "C:\Potential PII Report.csv"
+
+  This example produces a report on files in the folder "\\server11\share\sales" that contain PII, 
+  and will output the csv file to "c:\Potential PII Report.csv"
+
+
+ .LINK
+  https://github.com/siraddison/posh
+
+ .NOTES
+  Function by Sir Addison
+  v1.0 - 07/12/2020
+
+#>
+
+    [CmdletBinding(DefaultParameterSetName=’FolderPath’)]
+    [Alias('GPII')]
+    Param
+    (
+        # The input for this parameter is the Computer hostname to which you want to collect Auto Run data.
+        [SupportsWildCards()]
+
+        [Parameter(Mandatory=$false,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0,
+                   ParameterSetName=’FolderPath’)]
+                                          
+        $TargetFolder = "$env:USERPROFILE\Desktop",
+
+        [Parameter(Mandatory=$false,
+                   Position=1)]
+        # Path on the computer where you would like the output file.
+        $OutputPath = "$env:USERPROFILE\Desktop\Potential PII Report $((Get-Date).ToString("yyyyMMdd_HHmmss")).csv"                
+    )
+    
+    #This pattern searches for SSNs in the "XXX-XX-XXXX" and "XXX XX XXXX" format
+    $pattern1 = '[0-9]{3}[-| ][0-9]{2}[-| ][0-9]{4}'
+
+    #This pattern searches for SSNs without dashes or spaces, i.e. "XXXXXXXXX"
+    #$pattern2 = '[0-9]{9}'
+
+    #This pattern is for credit card numbers from Visa, Discover, and MasterCard    
+    #$pattern3 = '[456][0-9]{3}[-| ][0-9]{4}[-| ][0-9]{4}[-| ][0-9]{4}'
+
+    #This variable is for searching credit card numbers from American Express
+    #$pattern4= '3[47][0-9]{13}","3[47][0-9]{2}[-| ][0-9]{6}[-| ][0-9]{5}'
+
+    $pattern5 = 'Privacy Act'
+
+    $pattern6 = 'ssn'
+
+    $pattern7 = 'social security number'
+
+    #$pattern8 = 'credit card'
+
+    $pattern9 = 'sensitive'
+
+    $pattern10 = 'confidential'
+
+    $erroractionpref = "SilentlyContinue"
+   
+    try{        
+        $Obj=@()
+        $Obj+= @(
+            Get-ChildItem -Recurse -file -force -path $TargetFolder -Exclude *.*db, *.jpg, *.xps, *.msg, *.bmp, *.xfdl, *.wmv -ErrorAction $erroractionpref |
+            
+            where { 
+                #Patterns 2, 3, 4, and 8 are currently ommitted.
+                $_ | Select-String -pattern $pattern1, $pattern5, $pattern6, $pattern7, $pattern9, $pattern10 -ErrorAction $erroractionpref
+            }
+        )     
+    }
+    catch{$_}
+
+    $obj | Select-Object -Property FullName, Directory, CreationTime, Extension, LastWriteTime | Export-Csv $OutputPath -NoTypeInformation -append
+}
