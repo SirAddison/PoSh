@@ -2,9 +2,16 @@ function Get-PII{
 <# 
 
  .SYNOPSIS
+  ---------------------------------------------------------------------------------------------
+
+  SHOULD NOT BE RAN AS ADMIN IN ORDER TO DETECT UNSECURED PII
+
+  ---------------------------------------------------------------------------------------------
+
   Function to report on files containing Personally Identifiable Information (PII)
 
  .DESCRIPTION
+
   Function produces an CSV report of files of certain extensions in certain folders, 
   that contain PII such as social security numbers and credit card card numbers. 
 
@@ -27,6 +34,12 @@ function Get-PII{
 
  .LINK
   https://github.com/siraddison/posh
+
+  ---------------------------------------------------------------------------------------------
+
+  SHOULD NOT BE RAN AS ADMIN IN ORDER TO DETECT UNSECURED PII
+
+  ---------------------------------------------------------------------------------------------
 
  .NOTES
   Function by Sir Addison
