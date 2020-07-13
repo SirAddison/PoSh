@@ -32,7 +32,11 @@ function Find-WirelessAdapters
 
    This example will identify installed Applications on any computers found within the distinguished name path that is defined using the -OUPath parameter, and offer options based on a pre-defined list that is chosen in the -Options parameter dropdown menu. Copmuters that are found to have Wireless NICs that are Enabled, or Enabled and Connected, depending on the selected option in the pre-defined list will be output to the desktop by default and will be called InterfaceData.csv.
 
+.LINK
+   https://github.com/siraddison/posh
+
 .NOTES
+   Modified 13 July 2020
    Sir Addison
 
 #>
