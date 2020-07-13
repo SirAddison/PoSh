@@ -23,7 +23,7 @@ function Get-PII{
   Get-PII
 
   This example produces a report on files on the users Desktop that contain PII, 
-  and will output the csv file to users desktop labled "Potential PII Report.csv"
+  and will output the csv file to users desktop labeled "Potential PII Report.csv"
 
  .EXAMPLE 
   Get-PII -TargetFolder "\\server11\share\sales" -OutputPath "C:\Potential PII Report.csv"
