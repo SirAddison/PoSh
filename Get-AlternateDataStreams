@@ -1,5 +1,7 @@
+function Get-AlternateDataStreams
+{
 <#
-.Synopsis
+.SYNOPSIS
     Finds Alternate Data Streams on workstations or servers.
 
 .DESCRIPTION
@@ -30,12 +32,11 @@
        
     This example will search the c:\ recursively for alternate data streams under on a single computer. Note: There will be an output file will be dumped to the desktop by default and called AlternateDataStreams.csv.
         
- .AUTHOR
-    Sir Addison 
+ .NOTES
+    Author: Sir Addison 
+    Modified 13 July 2020
  #>
 
-function Get-AlternateDataStreams
-{
     [CmdletBinding(DefaultParameterSetName=’ComputerName’)]
     [Alias('GADS')]
     Param
@@ -224,5 +225,3 @@ DynamicParam{
             $ADSInfo | select PSComputerName,Stream, Length, FileName | export-csv $OutputPath -NoTypeInformation
     }   
 }
-    
-
