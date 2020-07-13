@@ -1,5 +1,7 @@
+function Get-AutoRuns
+{
 <#
-.Synopsis
+.SYNOPSIS
     Finds which apps run automatically on startup on workstations or servers.
 
 .DESCRIPTION
@@ -24,13 +26,15 @@
     Get-AutoRuns -OUPath <"OU=Computers,DC=Domain,DC=Com"> 
     
     This example will identify which apps run automatically on startup on any computers found within the distinguished name path that is defined using the -OUPath parameter.
-    
- .AUTHOR
+
+.LINK
+    https://github.com/siraddison/posh
+
+ .NOTES
+    Modified 13 July 2020
     Sir Addison / Eric Jansen
  #>
 
-function Get-AutoRuns
-{
     [CmdletBinding(DefaultParameterSetName=’ComputerName’)]
     [Alias('GAR')]
     Param
