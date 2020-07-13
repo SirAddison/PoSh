@@ -1,5 +1,7 @@
+function Find-WirelessAdapters
+{
 <#
-.Synopsis
+.SYNOPSIS
    Finds installed applications with the ability to filter based on a predefined list.
 
 .DESCRIPTION
@@ -30,12 +32,11 @@
 
    This example will identify installed Applications on any computers found within the distinguished name path that is defined using the -OUPath parameter, and offer options based on a pre-defined list that is chosen in the -Options parameter dropdown menu. Copmuters that are found to have Wireless NICs that are Enabled, or Enabled and Connected, depending on the selected option in the pre-defined list will be output to the desktop by default and will be called InterfaceData.csv.
 
-.AUTHOR
+.NOTES
    Sir Addison
 
 #>
-function Find-WirelessAdapters
-{
+
     [CmdletBinding(DefaultParameterSetName=’ComputerName’)]
     [Alias('FWA')]
     Param
