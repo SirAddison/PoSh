@@ -1,9 +1,25 @@
+function Get-ClipBoard-Content 
+{
 <#
-.Synopsis
+
+.SYNOPSIS
    Monitors the clipboard on a specified interval for changes to copied text and outputs it on the screen.
 
 .DESCRIPTION
    See Above.
+
+.PARAMETER CollectionLimit
+
+   Specifies the interval in minutes to capture clipboard text. Defaults to indefinite collection.
+
+.PARAMETER PollInterval
+
+   Interval (in seconds) to check the clipboard for changes, defaults to 15 seconds.
+
+.PARAMETER OutputPath
+    Specifies the name and path for the CSV-based output file. By default,
+    Get-ClipBoard-Contents.ps1 generates a name from the date and time it runs, and
+    saves the output to the users desktop.
 
 .EXAMPLE
    Get-ClipBoardContent -ComputerName <Computer Name> 
@@ -30,22 +46,18 @@
 
    This example will monitor the clipboard on a single computer and output what is copied to the clipboard every 15 seconds unless defined differently by the -PollInterval parameter.
 
+.LINK
+   https://github.com/siraddison/posh
 
-.PARAMETER CollectionLimit
+.NOTES
+   Author: Sir Addison 
+    
+   v2.0 - 07/14/2020
 
-   Specifies the interval in minutes to capture clipboard text. Defaults to indefinite collection.
-
-.PARAMETER PollInterval
-
-   Interval (in seconds) to check the clipboard for changes, defaults to 15 seconds.
-
-
-.AUTHOR
-   Sir Addison
+   Change Log:
+    - Repaired the help page "Get-ClipBoard-Content"
     
 #>
-
-function Get-ClipBoard-Content {
 
         [CmdletBinding(DefaultParameterSetName="ComputerName")]
         [Alias('GCC','Get-ClipboardContent','Get-ClipBoardContent')]
