@@ -1,5 +1,7 @@
+function Get-InstalledApplications
+{
 <#
-.Synopsis
+.SYNOPSIS
    Finds installed applications with the ability to filter based on a predefined list.
 
 .DESCRIPTION
@@ -30,12 +32,19 @@
 
    This example will identify installed Applications on any computers found within the distinguished name path that is defined using the -OUPath parameter, and cross-reference the full application list against the pre-defined list that is chosen in the -ApplicationType parameter dropdown menu. Applications that are missing from the pre-defined list will be output to the desktop by default and will be called InstalledApplications.csv.
 
-.AUTHOR
-   Sir Addison  
+.LINK
+   https://github.com/siraddison/posh
+
+.NOTES
+   Author: Sir Addison 
+    
+   v2.0 - 07/14/2020
+
+   Change Log:
+    - Repaired the help page "Get-Help Get-InstalledApplications"
 
 #>
-function Get-InstalledApplications
-{
+
     [CmdletBinding(DefaultParameterSetName=’ComputerName’)]
     [Alias('GIA')]
     Param
