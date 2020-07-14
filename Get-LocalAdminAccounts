@@ -6,6 +6,21 @@ function Get-LocalAdminAccounts
 
 .DESCRIPTION
     See Above.
+
+.PARAMETER OutputPath
+    Specifies the name and path for the CSV-based output file. By default,
+    Get-LocalAdminAccounts.ps1 generates a name from the date and time it runs, and
+    saves the output to the users desktop.
+
+.INPUTS
+    Get-LocalAdminAccounts -ComputerName $(Get-Content C:\computers.txt) 
+    
+    This input parameter will identify local admin accounts on multiple computers that are imported from a .txt file.
+
+.OUTPUTS
+    Get-LocalAdminAccounts -OutputPath "c:\LocalAdminAccounts.csv"
+          
+    The -OutoutPath parameter will output the csv file to "c:\LocalAdminAccounts.csv" defined by the OutputPath parameter above.    
     
 .EXAMPLE
     Get-LocalAdminAccounts -ComputerName <Computer Name> 
@@ -31,29 +46,17 @@ function Get-LocalAdminAccounts
     Get-LocalAdminAccounts -OUPath <"OU=Computers,DC=Domain,DC=Com"> -AccountType <Predefined List> 
     
     This example will identify local admin accounts on any computers found within the distinguished name path that is defined using the -OUPath parameter. There will be a pre-defined list in the -AccountType parameter consisting of either local accounts, active directory accounts, or both. Accounts that are found from the pre-defined list will be output to the desktop by default and will be called LocalAdminAccounts.csv.
- 
-.INPUTS
-    Get-LocalAdminAccounts -ComputerName $(Get-Content C:\computers.txt) 
-    
-    This input parameter will identify local admin accounts on multiple computers that are imported from a .txt file.
-
-.OUTPUTS
-    Get-LocalAdminAccounts -OutputPath "c:\LocalAdminAccounts.csv"
-          
-    The -OutoutPath parameter will output the csv file to "c:\LocalAdminAccounts.csv" defined by the OutputPath parameter above.
       
 .LINK
-   https://github.com/siraddison/posh
+    https://github.com/siraddison/posh
 
 .NOTES
-   Author: Sir Addison 
+    Author: Sir Addison 
     
-   v2.0 - 07/14/2020
+    v2.0 - 07/14/2020
 
-  Change Log:
-  v2.0  
+    Change Log:
      - Repaired the help page "Get-Help Get-LocalAdminAccounts"
-     - Added Input and Output to the help page
  #>
 
     [CmdletBinding(DefaultParameterSetName="ComputerName")]
@@ -91,7 +94,7 @@ function Get-LocalAdminAccounts
          $AttributeCollection.Add($Attributes)
              
          $Values ="All","ActiveDirectory","Local"
-     
+    
          $ValidateSet = New-Object System.Management.Automation.ValidateSetAttribute($Values)
          $AttributeCollection.Add($ValidateSet)
              
