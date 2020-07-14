@@ -1,9 +1,26 @@
+function Get-UnsignedDLLs
+{
 <#
-.Synopsis
+.SYNOPSIS
    Finds unsigned DLLs on 64-bit and 32-bit systems within the C:\Windows\* directory.
 
 .DESCRIPTION
-   see above
+   see above.
+
+.PARAMETER OutputPath
+   Specifies the name and path for the CSV-based output file. By default,
+   Get-UnsignedDLLs.ps1 generates a name from the date and time it runs, and
+   saves the output to the users desktop.
+
+.INPUTS
+    Get-UnsignedDLLs -ComputerName $(Get-Content C:\computers.txt) 
+    
+    This input parameter will identify unsigned DLLs on multiple computers that are imported from a .txt file.
+
+.OUTPUTS
+    Get-UnsignedDLLs -OutputPath "c:\UnsignedDLLs.csv"
+          
+    The -OutoutPath parameter will output the csv file to "c:\UnsignedDLLs.csv" defined by the OutputPath parameter above.
 
 .EXAMPLE
    Get-UnsignedDLLs -ComputerName <Computer Name> 
@@ -19,14 +36,20 @@
    Get-UnsignedDLLs -ComputerName $(Get-Content C:\computers.txt) 
 
    This example will find unsigned DLLs on 64-bit and 32-bit systems within the C:\Windows\* directory on multiple computers that are imported from a file.
-   
-.AUTHOR
-   Sir Addison 
+        
+.LINK
+   https://github.com/siraddison/posh
+
+.NOTES
+   Author: Sir Addison 
+    
+   v2.0 - 07/14/2020
+
+   Change Log:
+    - Repaired the help page "Get-Help Get-UnsignedDLLs"
    
 #>
 
-function Get-UnsignedDLLs
-{
     [CmdletBinding(DefaultParameterSetName="ComputerName")]
     [Alias('GUDLL')]
     Param
