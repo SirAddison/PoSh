@@ -91,7 +91,7 @@ function Get-LocalAdminAccounts
          $AttributeCollection.Add($Attributes)
              
          $Values ="All","ActiveDirectory","Local"
-    
+     
          $ValidateSet = New-Object System.Management.Automation.ValidateSetAttribute($Values)
          $AttributeCollection.Add($ValidateSet)
              
