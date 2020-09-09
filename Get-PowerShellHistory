@@ -26,7 +26,7 @@ function Get-PowerShellHistory
 .EXAMPLE
     Get-PowerShellHistory -OUPath <"OU=Computers,DC=Domain,DC=Com"> 
     
-    his example will scan for suspicious PowerShell keywords on any computers found within the distinguished name path that is defined using the -OUPath parameter.
+    This example will scan for suspicious PowerShell keywords on any computers found within the distinguished name path that is defined using the -OUPath parameter.
     
  .AUTHOR
     Sir Addison 
