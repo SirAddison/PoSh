@@ -3,7 +3,7 @@ function Get-PowerShellHistory
 
 <#
 .Synopsis
-    Finds which apps run automatically on startup on workstations or servers.
+    Scans for suspicious historic PowerShell keywords on workstations or servers.
 
 .DESCRIPTION
     See Above.
@@ -11,22 +11,22 @@ function Get-PowerShellHistory
 .EXAMPLE
     Get-PowerShellHistory -Computer <Computer Name> 
        
-    This example will scan for specific PowerShell keywords on a single computer. Note: There will be an output file will be dumped to the desktop by default and called PoShHistory.csv.
+    This example will scan for suspicious PowerShell keywords on a single computer. Note: There will be an output file will be dumped to the desktop by default and called PoShHistory.csv.
           
 .EXAMPLE
     Get-PowerShellHistory -Computer <Computer Name, Computer Name> -OutputPath "c:\PoShHistory.csv"
           
-    This example will scan for specific PowerShell keywords on multiple computers and will output the csv file to "c:\PoShHistory.csv" defined by the OutputPath parameter above.
+    This example will scan for suspicious PowerShell keywords on multiple computers and will output the csv file to "c:\PoShHistory.csv" defined by the OutputPath parameter above.
           
 .EXAMPLE
     Get-PowerShellHistory -Computer $(Get-Content C:\computers.txt) 
     
-    This example will scan for specific PowerShell keywords on on multiple computers that are imported from a file.
+    This example will scan for suspicious PowerShell keywords on on multiple computers that are imported from a file.
         
 .EXAMPLE
     Get-PowerShellHistory -OUPath <"OU=Computers,DC=Domain,DC=Com"> 
     
-    his example will scan for specific PowerShell keywords on any computers found within the distinguished name path that is defined using the -OUPath parameter.
+    his example will scan for suspicious PowerShell keywords on any computers found within the distinguished name path that is defined using the -OUPath parameter.
     
  .AUTHOR
     Sir Addison 
@@ -36,7 +36,7 @@ function Get-PowerShellHistory
     [Alias('GPSH')]
     Param
     (
-        # The input for this parameter is the Computer hostname to which you want to collect PowerShell history data.
+        # The input for this parameter is the Computer hostname to which you want to collect PowerShell historic data.
         [Parameter(Mandatory=$false,
                    ValueFromPipelineByPropertyName=$true,
                    Position=0,
