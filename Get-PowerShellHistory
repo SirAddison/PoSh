@@ -1,0 +1,197 @@
+function Get-PowerShellHistory
+{
+
+<#
+.Synopsis
+    Finds which apps run automatically on startup on workstations or servers.
+
+.DESCRIPTION
+    See Above.
+    
+.EXAMPLE
+    Get-PowerShellHistory -Computer <Computer Name> 
+       
+    This example will scan for specific PowerShell keywords on a single computer. Note: There will be an output file will be dumped to the desktop by default and called PoShHistory.csv.
+          
+.EXAMPLE
+    Get-PowerShellHistory -Computer <Computer Name, Computer Name> -OutputPath "c:\PoShHistory.csv"
+          
+    This example will scan for specific PowerShell keywords on multiple computers and will output the csv file to "c:\PoShHistory.csv" defined by the OutputPath parameter above.
+          
+.EXAMPLE
+    Get-PowerShellHistory -Computer $(Get-Content C:\computers.txt) 
+    
+    This example will scan for specific PowerShell keywords on on multiple computers that are imported from a file.
+        
+.EXAMPLE
+    Get-PowerShellHistory -OUPath <"OU=Computers,DC=Domain,DC=Com"> 
+    
+    his example will scan for specific PowerShell keywords on any computers found within the distinguished name path that is defined using the -OUPath parameter.
+    
+ .AUTHOR
+    Sir Addison 
+#>
+
+    [CmdletBinding(DefaultParameterSetName=’ComputerName’)]
+    [Alias('GPSH')]
+    Param
+    (
+        # The input for this parameter is the Computer hostname to which you want to collect PowerShell history data.
+        [Parameter(Mandatory=$false,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0,
+                   ParameterSetName=’ComputerName’)]            
+        [array]$Computer = $env:COMPUTERNAME,
+
+        [Parameter(Mandatory=$false,
+                   Position=0,
+                   ParameterSetName=’OUPath’)]
+        # Distinguished Name path of which Organizational Unit you would like to find computers in.
+        $OUPath,
+
+        [Parameter(Mandatory=$false,
+                   Position=1)]
+        # Path on the computer where you would like the output file.
+        $OutputPath = "$env:USERPROFILE\Desktop\PoShHistory.csv"                
+)
+$i = 0
+
+$OutputPathRoot = $($OutputPath.split("\")[0..$($($OutputPath.split("\")).count - 2)]  -Join "\")
+
+$command = {
+
+    $AllUsers = (get-childitem C:\Users).Name
+
+    foreach($User in $AllUsers){
+
+        $CheckPSReadLine = Test-Path -Path "c:\users\$user\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt"
+
+        if ($CheckPSReadLine -eq "True"){
+
+            try{
+                $Checkforkeywords = Get-Content "c:\users\$user\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt" -ErrorAction SilentlyContinue |
+
+                Select-String -pattern 'nishang',
+                    'powersploit',
+                    'mimikatz',
+                    'mimidogz',
+                    'mimiyakz',
+                    '-nop','(New-Object Net.WebClient).DownloadString',
+                    '–ExecutionPolicy Bypass',
+                    '-version 2',
+                    '-v 2',
+                    'Start-BitTransfer',
+                    'Invoke-WebRequest' | select -expand line 
+                }
+                
+            Catch{$_}
+        }
+        else{
+            #Prints each user  
+            #$Checkforkeywords = "No suspicious keywords found for $User"
+
+            #Only prints users who have keywords
+            $Checkforkeywords = $null
+        }
+
+    $obj=@()
+    $objs=@()
+
+        $objs += New-Object -TypeName psobject
+        $objs | Add-Member -MemberType NoteProperty -Name Script -Value ($Checkforkeywords)
+   
+    $obj+= @(
+        Foreach ($scriptline in $objs.script){
+            New-Object PSObject -Property @{UserName=($User);
+            Script=$scriptline}
+        }
+        )
+    $obj 
+    }
+}
+
+
+$JobInfo = @()
+
+    Try{
+
+        If($OUPath){$Computers = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+        Else{$Computers = $Computer}
+
+        Foreach($Comp in $Computers){
+        $i++        
+        Write-Progress -Activity "Starting Remote Job on $comp" -Status "Progress:" -PercentComplete ($i/$Computers.count*100) 
+        $JobInfo += Invoke-Command -ComputerName $Comp -AsJob -ScriptBlock $command
+        }
+
+        }   
+    Catch{$_}  
+    $PoShInfo = @()  
+    $j = 0   
+    $KilledJobs = @() 
+    #Only Starting Sleep for a second because the Write-Progress using the -Completed parameter completely kills the Progress bar if there's only a small amount of machines, since the loop runs so fast. 
+    #It kills the bar before it's even presented to the screen. If you're running jobs agains a large number of machines this isn't an issue.   
+    
+    Start-Sleep 1    
+    Write-Progress -Activity "Job Disbursement Complete" -Completed   
+    
+    <#
+    Collect all of the jobs to see which ones are still running and present a count. 
+    For each job that it finds running, it checks the start time of the job. If the job has been running for more than 60 minutes, it kills job.   
+    Each time it goes through the loop, it goes to sleep for 20 seconds before checking everything all over again.  
+    Once there no more running jobs, it moves on.
+    #>
+    
+    Do{        
+    Write-Host "Still have" $(Get-Job | where State -eq "Running").count "job(s) running.."                  
+        If($(Get-Job | where State -eq "Running")){
+        $RunninngJobs = Get-Job | where State -eq "Running"
+        }   
+        
+        Foreach($Job in $RunninngJobs){
+        
+        If($(Get-Date ($Job).PSBeginTime).AddMinutes("60") -lt $(Get-Date)){
+        
+        $Job | Stop-Job
+        $Job | Remove-Job
+        $KilledJobs += $Job
+        $Job = $null
+        }
+        
+    }
+    Start-Sleep -Seconds 20
+    
+    }
+    Until((get-job).State -notcontains "Running")
+
+    Write-Host     
+    Write-Host "Jobs completed Running!" -ForegroundColor Green
+    Write-Host "Collecting data from the jobs now.."  
+    Write-Host     
+    Write-Host "The data can be retrieved here:"  $OutputPath   
+    
+    Foreach($Job in $JobInfo){    
+    
+    $JobStatus = Get-Job $Job.ID       
+    
+        If($JobStatus.State -eq "Completed"){   
+        $PoShInfo += Receive-Job $Job.ID     
+        $Job.Location | Out-File $($OutputPathRoot + "\PoSh_HistoryCompletedJobs.txt") -Append     
+        Remove-Job $Job.ID                      
+        
+        }
+        Elseif($JobStatus.State -eq "Failed"){ 
+        $Job.Location | Out-File $($OutputPathRoot + "\PoSh_HistoryFailedJobs.txt") -Append  
+        Remove-Job $Job.ID                      
+        }   
+        
+    $Job = $null  
+    }
+        
+    ForEach($Job in $KilledJobs){ 
+    $Job.Location | Out-File $($OutputPathRoot + "\PoSh_HistoryKilledJobs.txt") -Append  
+    }
+    
+    Write-Host "Failed, Killed, and Completed jobs can be retrieved here:" $OutputPathRoot 
+    $PoShInfo | select UserName,PSComputerName,Script | export-csv $OutputPath -NoTypeInformation
+}
