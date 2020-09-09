@@ -76,6 +76,8 @@ $command = {
                     'mimikatz',
                     'mimidogz',
                     'mimiyakz',
+                    'powersploit',
+                    'powerview',
                     '-nop','(New-Object Net.WebClient).DownloadString',
                     '–ExecutionPolicy Bypass',
                     '-version 2',
