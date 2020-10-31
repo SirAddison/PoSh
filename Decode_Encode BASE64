@@ -1,0 +1,11 @@
+#Code will decode BASE64 string text and save the output to your desktop in an html document.
+
+#Paste BASE64 script here in quotes
+"ENTER BASE 64 STRING TEXT HERE" > $env:USERPROFILE\Desktop\encodedtext.txt
+
+#Path outlines where the encoded file resides
+$file = "$env:USERPROFILE\Desktop\encodedtext.txt"
+
+#Make no change here
+$data = get-content $file
+[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($data)) > $env:USERPROFILE\desktop\decodedscript.html
