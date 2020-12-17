@@ -15,14 +15,19 @@ function Get-SolarWindsDetections{
    This example will find solarwinds components currently installed on a single computer. Note: The output file will be dumped to the desktop by default and called SolarwindsDetections.csv.
 
 .EXAMPLE
-   Get-SolarWindsDetections -ComputerName <Computer Name, Computer Name> -OutputPath "c:\SolarwindsDetections.csv"
-
-   This example will find find solarwinds components currently installed on into multiple computers and will output the csv file to "c:\SolarwindsDetections.csv" defined by the OutputPath parameter above.
+    SolarWindsDetections -OUPath <"OU=Computers,DC=Domain,DC=Com"> 
+    
+    his example will find solarwinds components currently installed on multiple computers found within the distinguished name path that is defined using the -OUPath parameter.
 
 .EXAMPLE
    Get-SolarWindsDetections -ComputerName (Get-Content C:\computers.txt) 
 
    This example will find solarwinds components currently installed on multiple computers that are imported from a file.
+
+.EXAMPLE
+   Get-SolarWindsDetections -ComputerName <Computer Name, Computer Name> -OutputPath "c:\SolarwindsDetections.csv"
+
+   This example will find find solarwinds components currently installed on into multiple computers and will output the csv file to "c:\SolarwindsDetections.csv" defined by the OutputPath parameter above.
    
 .LINK
   https://github.com/siraddison/posh
