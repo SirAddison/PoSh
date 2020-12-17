@@ -1,0 +1,226 @@
+function Get-SolarWindsDetections{
+<#
+.SYNOPSIS
+   Finds software that is associated with Orian SolarWinds.
+
+.DESCRIPTION
+   see above
+
+.PARAMETER ComputerName
+    Computer(s) to seach for solarwinds applications on.
+
+.EXAMPLE
+   Get-SolarWindsDetections -ComputerName <Computer Name> 
+
+   This example will find solarwinds components currently installed on a single computer. Note: The output file will be dumped to the desktop by default and called SolarwindsDetections.csv.
+
+.EXAMPLE
+   Get-SolarWindsDetections -ComputerName <Computer Name, Computer Name> -OutputPath "c:\SolarwindsDetections.csv"
+
+   This example will find find solarwinds components currently installed on into multiple computers and will output the csv file to "c:\SolarwindsDetections.csv" defined by the OutputPath parameter above.
+
+.EXAMPLE
+   Get-SolarWindsDetections -ComputerName (Get-Content C:\computers.txt) 
+
+   This example will find solarwinds components currently installed on multiple computers that are imported from a file.
+   
+.LINK
+  https://github.com/siraddison/posh
+   
+#>
+
+    [CmdletBinding(DefaultParameterSetName="ComputerName")]
+    [Alias('GSWD')]
+    Param
+    (
+        # The input for this parameter is the Computer hostname to which you want to collect Solarwinds data.
+        [Parameter(Mandatory=$false,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0,
+                   ParameterSetName="ComputerName")]  
+
+        [array]$Computer = $env:COMPUTERNAME,
+
+        [Parameter(Mandatory=$true,
+                   Position=0,
+                   ParameterSetName="OUPath")]
+        # Distinguished Name path of which Organizational Unit you would like to find computers in.
+        $OUPath,
+
+        [Parameter(Mandatory=$false,
+                   Position=1)]
+        # Path on the computer where you would like the output file.
+        $OutputPath = "$env:USERPROFILE\Desktop\SolarwindsDetections.csv"
+)
+
+$OutputPathRoot = $($OutputPath.split("\")[0..$($($OutputPath.split("\")).count - 2)]  -Join "\")
+
+
+        If($OUPath){$ComputerName = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+
+$command = {
+        $PropertyValues += (Get-ItemProperty HKLM:\Software\Classes\Installer\Products\*).ProductName
+        $Obj=@()
+        $objs = New-Object -TypeName psobject
+        $objs | Add-Member -MemberType NoteProperty -Name Name -Value $PropertyValues
+
+        Foreach ($thing in $objs.name){
+
+            $obj += New-Object PSObject -Property @{UserName=(Get-WmiObject -Class win32_computersystem).UserName;
+
+            ComputerName=(Get-WmiObject -Class win32_computersystem).Name;
+
+            InternetProtocol = @(@(Get-WmiObject Win32_NetworkAdapterConfiguration | Select-Object -ExpandProperty IPAddress) -like "*.*")[0];
+
+            MACAddress = (Get-WmiObject Win32_NetworkAdapterConfiguration | where {$_.ipenabled -EQ $true}).Macaddress | select-object -first 1;
+
+            DLLPresent = "N/A";  
+
+            Application=$thing}          
+        }
+
+        $DLLPaths = 
+        "C:\Program Files (x86)\N-able Technologies\Windows Software Probe\bin\SolarWinds.Orion.Core.BusinessLayer.dll", 
+        "C:\Program Files (x86)\Solarwinds\Network Topology Mapper\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\Solarwinds\Network Topology Mapper\Service\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\DPI\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\NCM\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\Interfaces.Discovery\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\DPA\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\HardwareHealth\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\Interfaces\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\NetFlowTrafficAnalysis\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Program Files (x86)\SolarWinds\Orion\NPM\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\Windows\System32\config\systemprofile\AppData\Local\assembly\temp\SolarWinds.Orion.Core.BusinessLayer.dll",
+        "C:\windows\syswow64\netsetupsvc.dll"
+        
+
+        foreach($Path in $DLLPaths){    
+        if(Get-ChildItem -Path $Path -ErrorAction SilentlyContinue){
+        $obj += New-Object psobject -Property @{UserName=(Get-WmiObject -Class win32_computersystem).UserName;
+
+        ComputerName=(Get-WmiObject -Class win32_computersystem).Name;
+
+        InternetProtocol = @(@(Get-WmiObject Win32_NetworkAdapterConfiguration | Select-Object -ExpandProperty IPAddress) -like "*.*")[0];
+
+        MACAddress = (Get-WmiObject Win32_NetworkAdapterConfiguration | where {$_.ipenabled -EQ $true}).Macaddress | select-object -first 1;
+
+        Application = $path;
+        
+        DLLPresent = (get-filehash -path $Path -ErrorAction SilentlyContinue).hash}}
+
+        else{}
+        }      
+
+        $Obj | 
+
+        #For additional supicious hashes add them here.
+        Where-Object -FilterScript {
+            ($_.Application -match "Solar") -or
+            ($_.DLLPresent -eq "32519b85c0b422e4656de6e6c41878e95fd95026267daab4215ee59c107d6c77") -or
+            ($_.DLLPresent -eq "ce77d116a074dab7a22a0fd4f2c1ab475f16eec42e1ded3c0b0aa8211fe858d6") -or
+            ($_.DLLPresent -eq "dab758bf98d9b36fa057a66cd0284737abf89857b73ca89280267ee7caf62f3b") -or
+            ($_.DLLPresent -eq "eb6fab5a2964c5817fb239a7a5079cabca0a00464fb3e07155f28b0a57a2c0ed") -or
+            ($_.DLLPresent -eq "ac1b2b89e60707a20e9eb1ca480bc3410ead40643b386d624c5d21b47c02917c") -or
+            ($_.DLLPresent -eq "019085a76ba7126fff22770d71bd901c325fc68ac55aa743327984e89f4b0134") -or
+            ($_.DLLPresent -eq "c09040d35630d75dfef0f804f320f8b3d16a481071076918e9b236a321c1ea77") -or
+            ($_.DLLPresent -eq "a25cadd48d70f6ea0c4a241d99c5241269e6faccb4054e62d16784640f8e53bc") -or
+            ($_.DLLPresent -eq "d3c6785e18fba3749fb785bc313cf8346182f532c59172b69adfb31b96a5d0af") -or
+            ($_.DLLPresent -eq "e0b9eda35f01c1540134aba9195e7e6393286dde3e001fce36fb661cc346b91d") -or
+            ($_.DLLPresent -eq "a3efbc07068606ba1c19a7ef21f4de15d15b41ef680832d7bcba485143668f2d") -or
+            ($_.DLLPresent -eq "20e35055113dac104d2bb02d4e7e33413fae0e5a426e0eea0dfd2c1dce692fd9") -or
+            ($_.DLLPresent -eq "0f5d7e6dfdd62c83eb096ba193b5ae394001bac036745495674156ead6557589") -or
+            ($_.DLLPresent -eq "2b3445e42d64c85a5475bdbc88a50ba8c013febb53ea97119a11604b7595e53d") -or
+            #Below is a known good hash added for testing purposes only. Please remove before running script.
+            ($_.DLLPresent -eq "143632672DCB6EF324343739636B984F5C52ECE0E078CFEE7C6CAC4A3545403A")
+
+        }
+}
+
+
+$JobInfo = @()
+
+    Try{
+
+        If($OUPath){$Computers = (Get-ADComputer -Filter * -SearchBase $OUPath).Name}
+        Else{$Computers = $Computer}
+
+        Foreach($Comp in $Computers){
+        $ii++        
+        Write-Progress -Activity "Starting Remote Job on $comp" -Status "Progress:" -PercentComplete ($ii/$Computers.count*100) 
+        $JobInfo += Invoke-Command -ComputerName $Comp -AsJob -ScriptBlock $command
+        }
+
+        }   
+    Catch{$_}  
+    $SWInfo = @()  
+    $j = 0   
+    $KilledJobs = @() 
+    #Only Starting Sleep for a second because the Write-Progress using the -Completed parameter completely kills the Progress bar if there's only a small amount of machines, since the loop runs so fast. 
+    #It kills the bar before it's even presented to the screen. If you're running jobs agains a large number of machines this isn't an issue.   
+    
+    Start-Sleep 1    
+    Write-Progress -Activity "Job Disbursement Complete" -Completed   
+    
+    <#
+    Collect all of the jobs to see which ones are still running and present a count. 
+    For each job that it finds running, it checks the start time of the job. If the job has been running for more than 60 minutes, it kills job.   
+    Each time it goes through the loop, it goes to sleep for 20 seconds before checking everything all over again.  
+    Once there no more running jobs, it moves on.
+    #>
+    
+    Do{        
+    Write-Host "Still have" $(Get-Job | where State -eq "Running").count "job(s) running.."                  
+        If($(Get-Job | where State -eq "Running")){
+        $RunninngJobs = Get-Job | where State -eq "Running"
+        }   
+        
+        Foreach($Job in $RunninngJobs){
+        
+        #Timer is currently set to 1hr (60min)
+        If($(Get-Date ($Job).PSBeginTime).AddMinutes("2") -lt $(Get-Date)){
+        
+        $Job | Stop-Job
+        $Job | Remove-Job
+        $KilledJobs += $Job
+        $Job = $null
+        }
+        
+    }
+    Start-Sleep -Seconds 20
+    
+    }
+    Until((get-job).State -notcontains "Running")
+
+    Write-Host     
+    Write-Host "Jobs completed Running!" -ForegroundColor Green
+    Write-Host "Collecting data from the jobs now.."  
+    Write-Host     
+    Write-Host "The data can be retrieved here:"  $OutputPath   
+    
+    Foreach($Job in $JobInfo){    
+    
+    $JobStatus = Get-Job $Job.ID -ErrorAction SilentlyContinue       
+    
+        If($JobStatus.State -eq "Completed"){   
+        $SWInfo += Receive-Job $Job.ID     
+        $Job.Location | Out-File $($OutputPathRoot + "\SW_CompletedJobs.txt") -Append     
+        Remove-Job $Job.ID                      
+        
+        }
+        Elseif($JobStatus.State -eq "Failed"){ 
+        $Job.Location | Out-File $($OutputPathRoot + "\SW_FailedJobs.txt") -Append  
+        Remove-Job $Job.ID                      
+        }   
+        
+    $Job = $null  
+    }
+        
+    ForEach($Job in $KilledJobs){ 
+    $Job.Location | Out-File $($OutputPathRoot + "\SW_KilledJobs.txt") -Append  
+    }
+    
+    Write-Host "Failed, Killed, and Completed jobs can be retrieved here:" $OutputPathRoot 
+    $SWInfo | Select-Object ComputerName, Application, InternetProtocol, DLLPresent, UserName, MACAddress | export-csv $OutputPath -NoTypeInformation
+}
