@@ -84,6 +84,10 @@ $command = {
             Application=$thing}          
         }
 
+        #Refrences: 
+        #https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html
+        #https://www.sans.org/blog/what-you-need-to-know-about-the-solarwinds-supply-chain-attack/
+        
         $DLLPaths = 
         "C:\Program Files (x86)\N-able Technologies\Windows Software Probe\bin\SolarWinds.Orion.Core.BusinessLayer.dll", 
         "C:\Program Files (x86)\Solarwinds\Network Topology Mapper\SolarWinds.Orion.Core.BusinessLayer.dll",
