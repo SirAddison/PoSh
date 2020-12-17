@@ -137,8 +137,8 @@ $command = {
             ($_.DLLPresent -eq "20e35055113dac104d2bb02d4e7e33413fae0e5a426e0eea0dfd2c1dce692fd9") -or
             ($_.DLLPresent -eq "0f5d7e6dfdd62c83eb096ba193b5ae394001bac036745495674156ead6557589") -or
             ($_.DLLPresent -eq "2b3445e42d64c85a5475bdbc88a50ba8c013febb53ea97119a11604b7595e53d") -or
-            #Below is a known good hash added for testing purposes only. Please remove before running script.
-            ($_.DLLPresent -eq "143632672DCB6EF324343739636B984F5C52ECE0E078CFEE7C6CAC4A3545403A")
+            #Below is a known good hash added for testing purposes only. Please comment out before running script.
+            #($_.DLLPresent -eq "143632672DCB6EF324343739636B984F5C52ECE0E078CFEE7C6CAC4A3545403A")
 
         }
 }
