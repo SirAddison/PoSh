@@ -184,7 +184,7 @@ $JobInfo = @()
         Foreach($Job in $RunninngJobs){
         
         #Timer is currently set to 1hr (60min)
-        If($(Get-Date ($Job).PSBeginTime).AddMinutes("2") -lt $(Get-Date)){
+        If($(Get-Date ($Job).PSBeginTime).AddMinutes("60") -lt $(Get-Date)){
         
         $Job | Stop-Job
         $Job | Remove-Job
