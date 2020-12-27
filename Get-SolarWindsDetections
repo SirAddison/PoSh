@@ -17,7 +17,7 @@ function Get-SolarWindsDetections{
 .EXAMPLE
     SolarWindsDetections -OUPath <"OU=Computers,DC=Domain,DC=Com"> 
     
-    his example will find solarwinds components currently installed on multiple computers found within the distinguished name path that is defined using the -OUPath parameter.
+    This example will find solarwinds components currently installed on multiple computers found within the distinguished name path that is defined using the -OUPath parameter.
 
 .EXAMPLE
    Get-SolarWindsDetections -ComputerName (Get-Content C:\computers.txt) 
