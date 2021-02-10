@@ -31,7 +31,7 @@ function Get-AutoRuns
     https://github.com/siraddison/posh
 
  .NOTES
-    Modified 13 July 2020
+    Modified 10 February 2021
     Sir Addison / Eric Jansen
  #>
 
@@ -175,7 +175,7 @@ $JobInfo = @()
     
         If($JobStatus.State -eq "Completed"){   
         $AutoRunsInfo += Receive-Job $Job.ID     
-        $Job.Location | Out-File $($OutputPathRoot + "\AutoRuns_FailedCompletedJobs.txt") -Append     
+        $Job.Location | Out-File $($OutputPathRoot + "\AutoRuns_CompletedJobs.txt") -Append     
         Remove-Job $Job.ID                      
         
         }
