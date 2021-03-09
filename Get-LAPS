@@ -1,0 +1,1 @@
+Get-ADComputer -filter * -Properties ms-Mcs-AdmPwd | where ms-Mcs-AdmPwd -ne $null | ft name,ms-Mcs-AdmPwd -AutoSize
