@@ -1,0 +1,13 @@
+#change count to 1 if you only want one ping count.. right now its set to 2 incase one fails for whatever reason...
+
+#run this first
+Workflow Test-Ping{param([string[]]$iprange)foreach -parallel($ip in $iprange){"Pinging: $ip" 
+Test-Connection -ipaddres $ip -Count 2 -ErrorAction SilentlyContinue}}
+write-host "Now run 'Test-Ping -iprange (1..254 | % {"172.16.0."+$_})' <-- but with your seeking IPs.." -ForegroundColor Green
+
+#run this with your ip ONLY the first 3 octects.. 
+#change the 1..5 to hit your IP for testing.. i.e. if your IP is 192.168.91.2 then this would hit your ip for a quick test..
+#Test-Ping -iprange (1..5 | % {"192.168.91."+$_})
+
+Test-Ping -iprange (1..254 | % {"172.16.0."+$_})
+Test-Ping -iprange (1..254 | % {"172.16.1."+$_})
