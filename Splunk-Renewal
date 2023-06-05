@@ -1,0 +1,213 @@
+# Specify the directory to search (e.g., C:\)
+$searchDirectory = "C:\Program Files\"
+
+# Find the first two folders with "backup" in their names
+$folders = Get-ChildItem -Path $searchDirectory -Filter "*splunkbackup*" -Directory -Recurse | Select-Object -First 2
+
+# Check if matching folders are found
+if($folders.Count -ge 1) {
+    $folder1Name = $folders[0].Name
+    $folder1Path = $folders[0].FullName
+    #Write-Host "Folder 1: $folder1Name"
+    #Write-Host "Folder 1 path: $folder1Path"
+}
+
+if($folders.Count -ge 2) {
+    $folder2Name = $folders[1].Name
+    $folder2Path = $folders[1].FullName
+    #Write-Host "Folder 2: $folder2Name"
+    #Write-Host "Folder 2 path: $folder2Path"
+}
+
+# Check if any matching folders are found
+if($folders.Count -eq 0) {
+    Write-Host "No folders with 'backup' in their names found."
+}
+
+$command = {
+    Write-Host "Killing the service..."
+    Stop-Service -Name splunkd -Force -ErrorAction Ignore
+    Get-Service -name Splunkd
+    Write-Host "Removing old splunk software"
+
+    # Query WMI for installed software and retrieve the product code
+    $software = Get-WmiObject -Class Win32_Product | Select-Object Name, IdentifyingNumber
+
+    # Display the list of installed software and their product codes
+    $software | Format-Table -AutoSize
+
+    # Prompt the user to enter the name of the software to retrieve the product code
+    $softwareName = 'Splunk'
+
+    # Find the matching software in the list and retrieve its product code
+    $matchingSoftware = $software | Where-Object { $_.Name -like "*$softwareName*" }
+    if($matchingSoftware) {
+
+        $productCode = $matchingSoftware.IdentifyingNumber
+        Write-Host "Product Code for '$softwareName': $productCode"
+
+        # Build the command
+        $command = "msiexec.exe"
+        $arguments = "/x $productCode /qn"
+
+        # Start the process and wait for it to complete
+        $process = Start-Process -FilePath $command -ArgumentList $arguments -NoNewWindow -PassThru -Wait
+
+
+        # Check the exit code of the process
+        if ($process.ExitCode -eq 0) {
+            Write-Host "MSI uninstallation completed successfully."
+            #####################################
+            # Time to reinstall Splunk...       
+            #####################################
+
+            # place splunk installer on the desktop...
+            # Specify the path to the Splunk installer
+
+            # Specify the directory to search (in this case, the Desktop)
+            $searchDirectory = Join-Path $env:USERPROFILE 'Desktop'
+
+            # Search for files that contain "splunk" and "msi" in their names
+            $splunkFile = Get-ChildItem -Path $searchDirectory -Filter "*splunk*msi*" -File -Recurse
+
+            # Output the file path
+            $installerPath = $splunkFile | Select-Object -ExpandProperty FullName
+
+            # Define the arguments for silent installation
+            $installArgs = "AGREETOLICENSE=Yes SPLUNKUSERNAME=TempAdmin SPLUNKPASSWORD=TempMyNewPassword /qn"
+    
+            # Start the Splunk installer with silent mode
+            Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait
+
+            Stop-Service -Name Splunkd
+            Write-Host "Moving old data back into the database..hang tight..."
+            Copy-Item 'C:\Program Files\splunkbackup\*' -Destination 'C:\Program Files\Splunk\etc' -Recurse -Verbose -Force
+            Copy-Item 'C:\Program Files\splunkbackup_db\*' -Destination 'C:\Program Files\Splunk\var\lib\splunk\defaultdb\' -Recurse -Verbose -Force           
+            Start-Service -Name splunkd
+            Get-Service -Name splunkd
+        } 
+        else {
+            Write-Host "MSI uninstallation failed with exit code: $($process.ExitCode)"
+        }
+    }
+    else {
+        Write-Host "Software not found."
+    }
+}
+
+if($folders) {
+    $response = Read-Host "Folder 1 or Folder 2 exists. Do you want to delete them? (Y/N)"
+
+    #uncomment if running in sched task...
+    #$response = "Y"
+
+    if($response -eq "Y" -or $response -eq "y") {
+        if($folder1Path) {
+            Remove-Item $folder1Path -Recurse -Force -Verbose
+            Write-Host "Deleting and recreating Folder 1."
+            mkdir "C:\Program Files\splunkbackup"
+            Write-Host "Copying splunk data into splunkbackup"
+            Copy-Item "C:\Program Files\Splunk\etc\*" -Destination 'C:\Program Files\splunkbackup' -Force -Recurse -Verbose 
+        }
+
+        if($folder2Path) {
+            Remove-Item $folder2Path -Recurse -Force
+            Write-Host "Removing and recreating Folder 2."
+            mkdir "C:\Program Files\splunkbackup_db"
+            Write-Host "Copying splunk db data into splunkbackup_db"
+            Copy-Item "C:\Program Files\Splunk\var\lib\splunk\defaultdb\*" -Destination 'C:\Program Files\splunkbackup_db' -Force -Recurse -Verbose
+        }
+        Invoke-Command -ScriptBlock $command
+    }
+    elseif($response -eq "N" -or $response -eq "n"){
+        $responseBackup = Read-Host "Use old data in backup folders? (Y/N)"
+        if($responseBackup -eq "Y" -or $responseBackup -eq "y") {
+            Invoke-Command -ScriptBlock $command
+        }
+        else {
+            Write-Host "Splunk renewal canceled."
+        }
+    }
+    else {
+        Write-Host "Splunk renewal canceled. Please enter a valid response (Y/N)"
+    }
+}
+else{
+    $response = Read-Host "No backup folders exist permision to create new folders (Y/N)"
+    
+    #use response below if running in sched task...
+    #$response = "Y"
+
+    if($response -eq "Y" -or $response -eq "y") {       
+        Write-Host "Creating backup folders"
+        mkdir "C:\Program Files\splunkbackup"
+        mkdir "C:\Program Files\splunkbackup_db"
+        Write-Host "Copying splunk data into splunkbackup"
+        Copy-Item "C:\Program Files\Splunk\etc\*" -Destination 'C:\Program Files\splunkbackup' -Force -Recurse -Verbose 
+        Write-Host "Copying splunk db data into splunkbackup_db"
+        Copy-Item "C:\Program Files\Splunk\var\lib\splunk\defaultdb\*" -Destination 'C:\Program Files\splunkbackup_db' -Force -Recurse -Verbose
+
+        Invoke-Command -ScriptBlock $command
+    }
+    elseif($response -eq "N" -or $response -eq "n"){
+        
+        $responseBackup = Read-Host "Do you want a clean Splunk install? (Y/N)"
+        if($responseClean -eq "Y" -or $responseClean -eq "y") {
+
+            Write-Host "Killing the service..."
+            Stop-Service -Name splunkd -Force -ErrorAction Ignore
+            Get-Service -name Splunkd
+            Write-Host "Removing old splunk software"
+
+            # Query WMI for installed software and retrieve the product code
+            $software = Get-WmiObject -Class Win32_Product | Select-Object Name, IdentifyingNumber
+
+            # Display the list of installed software and their product codes
+            $software | Format-Table -AutoSize
+
+            # Prompt the user to enter the name of the software to retrieve the product code
+            $softwareName = 'Splunk'
+
+            # Find the matching software in the list and retrieve its product code
+            $matchingSoftware = $software | Where-Object { $_.Name -like "*$softwareName*" }
+            if($matchingSoftware) {
+
+                $productCode = $matchingSoftware.IdentifyingNumber
+                Write-Host "Product Code for '$softwareName': $productCode"
+                msiexec /x $productCode /qn 
+
+
+                #####################################
+                # Time to reinstall Splunk...       
+                #####################################
+
+                # place splunk installer on the desktop...
+                # Specify the path to the Splunk installer
+
+                # Specify the directory to search (in this case, the Desktop)
+                $searchDirectory = Join-Path $env:USERPROFILE 'Desktop'
+
+                # Search for files that contain "splunk" and "msi" in their names
+                $splunkFile = Get-ChildItem -Path $searchDirectory -Filter "*splunk*msi*" -File -Recurse
+
+                # Output the file path
+                $installerPath = $splunkFile | Select-Object -ExpandProperty FullName
+
+                # Define the arguments for silent installation
+                $installArgs = "AGREETOLICENSE=Yes SPLUNKUSERNAME=TempAdmin SPLUNKPASSWORD=TempMyNewPassword /qn"
+    
+                # Start the Splunk installer with silent mode
+                Start-Process -FilePath $installerPath -ArgumentList $installArgs -Wait
+
+                write-host "You can access your splunk web GUI on http://127.0.0.1:8000."
+                write-host "Creds: TempAdmin // TempMyNewPassword" -ForegroundColor Red
+            }
+            else{
+                   Write-Host "Splunk not installed"
+            }
+        }
+        else{
+            Write-Host "Splunk renewal canceled."
+        }
+    }
+}
