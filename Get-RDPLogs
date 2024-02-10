@@ -1,0 +1,268 @@
+function Get-RDPLogs 
+{
+<#
+.SYNOPSIS
+    Retrieves RDP-related events from .evtx files in a specified folder and saves them to a CSV file.
+
+.DESCRIPTION
+    The Get-RDPLogs cmdlet retrieves Remote Desktop Protocol (RDP)-related events from .evtx files in a specified folder and saves them to a CSV file.
+
+.PARAMETER OutputPath
+    -FolderPath <String>
+        Specifies the path to the folder containing the .evtx files. If not provided, the cmdlet prompts the user to enter the folder path.
+
+    -CsvFilePath <String>
+        Specifies the path to save the CSV file containing the retrieved events. If not provided, the CSV file is saved in the current directory with the name "EventLog.csv".
+
+.INPUTS
+    None. The cmdlet does not accept input from the pipeline.
+
+.OUTPUTS
+    A CSV file containing RDP-related events with the following columns:
+        - Time
+        - Event ID
+        - Subject User
+        - Subject Domain
+        - Target Server
+        - Account Whose Credentials Were Used
+        - Account Domain
+        - Network Address
+        - Hostname
+        - Server Name
+        - Security UserID
+        - Security Computer
+        - Logon Type
+        - Session ID
+        - Address
+        - Target User
+        - Target Domain
+        - Target IP
+        - User
+        - Session
+        - Reason
+           
+.EXAMPLE
+
+    Get-RDPLogs -FolderPath "C:\Logs" -CsvFilePath "C:\Output\EventLog.csv"
+
+    Description:
+        Retrieves RDP-related events from .evtx files in the "C:\Logs" folder and saves them to the "C:\Output\EventLog.csv" file.
+                 
+.EXAMPLE
+
+    Get-RDPLogs
+
+    Description:
+        Prompts the user to enter the folder path containing the .evtx files and saves the retrieved events to the "EventLog.csv" file in the current directory.
+  
+.LINK
+    https://github.com/siraddison/posh
+
+.NOTES
+    Author: Sir Addison 
+    
+    v1.0 - 02/10/2024
+
+    Change Log:
+     - None
+ #>
+
+    [CmdletBinding()]
+    param (
+        [string]$FolderPath,
+        [string]$CsvFilePath
+    )
+
+    if (-not $FolderPath) {
+        $FolderPath = Read-Host "Enter the folder path containing the .evtx files (press Enter to use the current directory: $($PWD.Path))"
+        if (-not $FolderPath) {
+            $FolderPath = $PWD.Path
+            Write-Host "Using the current directory: $($PWD.Path)" -ForegroundColor Green
+        } else {
+            Write-Host "Selected folder path: $FolderPath" -ForegroundColor Green
+        }
+    }
+
+    $TimeStamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    if (-not $CsvFilePath) {
+        $CsvFileName = "RDPLogs_$TimeStamp.csv"
+        $CsvFilePath = Join-Path -Path $PWD.Path -ChildPath $CsvFileName
+        Write-Host "CSV file path not provided. Using default file name: $($CsvFilePath)" -ForegroundColor Green
+    } else {
+        if (-not ($CsvFilePath -match "\.csv$")) {
+            if ($CsvFilePath.EndsWith("/") -or $CsvFilePath.EndsWith("\")) {
+                $CsvFilePath += "RDPLogs_$TimeStamp.csv"
+            } else {
+                $CsvFilePath += "\RDPLogs_$TimeStamp.csv"
+            }
+            Write-Host "Selected CSV file path: $($CsvFilePath)" -ForegroundColor Green
+        } else {
+            Write-Host "Selected CSV file path: $($CsvFilePath)" -ForegroundColor Green
+        }
+    }
+
+    # If folder path is not provided, display usage syntax
+    if (-not $FolderPath) {
+        Write-Output "Usage: Get-RDPLogs -FolderPath <folder_path> [-CsvFilePath <csv_file_path>]"
+        return
+    }
+
+    # Define the event IDs
+    # resource https://ponderthebits.com/2018/02/windows-rdp-related-event-logs-identification-tracking-and-investigation/
+    # resource https://frsecure.com/blog/rdp-connection-event-logs/
+    $eventIDs = @(4648, 4625, 4624, 1024, 1102, 1149, 21, 22, 23, 25, 40)
+
+
+    # Get all .evtx files in the specified folder
+    $logFiles = Get-ChildItem -Path $FolderPath -Filter "*.evtx"
+
+    # Check if any files were found
+    if ($logFiles) {
+        # Create an array to hold event objects
+        $eventObjects = @()
+Write-Host @"
+RRR   DDDD   PPPP       LLLL  OOO   GGGG  SSSS  
+R  R  D   D  P   P      L     O   O G     S     
+RRR   D   D  PPPP       L     O   O G  GG  SSS  
+R  R  D   D  P          L     O   O G   G     S 
+R   R DDDD   P          LLLL  OOO   GGGG  SSS 
+"@ -ForegroundColor Red
+
+        write-host "RDP Log Colletor // Author CW2 Sir Addison" -ForegroundColor Cyan
+
+        foreach ($logFile in $logFiles) {
+            Write-Output "Loading events from $($logFile.FullName)"
+            # Get events from the current log file
+            $events = Get-WinEvent -Path $logFile.FullName -ErrorAction SilentlyContinue
+
+            # Filter events by event IDs
+            $filteredEvents = $events | Where-Object { $_.Id -in $eventIDs }
+
+            # Check if any events were found
+            if ($filteredEvents) {
+                foreach ($event in $filteredEvents) {
+
+                    # Extract desired information from the event
+                    $eventXML = [xml]$event.ToXml()
+                    $eventTime = $event.TimeCreated
+                    $subjectUserName = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "SubjectUserName" } | Select-Object -ExpandProperty "#text"
+                    $subjectUserDomain = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "SubjectDomainName" } | Select-Object -ExpandProperty "#text"
+                    $targetServerName = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "TargetServerName" } | Select-Object -ExpandProperty "#text"
+                    $accountUsed = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "TargetUserName" -or $_.Name -eq "WorkstationName" } | Select-Object -ExpandProperty "#text" -First 1
+                    $accountDomain = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "TargetDomainName" } | Select-Object -ExpandProperty "#text" -First 1
+                    $networkAddress = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "IpAddress" } | Select-Object -ExpandProperty "#text"
+                    $hostname = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "Hostname" } | Select-Object -ExpandProperty "#text"
+                    $logonType = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "LogonType" } | Select-Object -ExpandProperty "#text"
+
+
+                    # Additional data for event ID 1024
+                    if ($event.Id -eq 1024) {
+                        $serverNameData = $eventXML.Event.EventData.Data | Where-Object { $_.Name -eq "Name" -and $_.InnerText -eq "Server Name" }
+                        $serverName = if ($serverNameData) { $serverNameData.ParentNode.SelectSingleNode("Data[@Name='Value']").'#text' } else { $null }
+                        # Exclude "CustomLevel" and "Name"
+                        $eventData = $eventXML.Event.EventData.Data | Where-Object { $_.Name -ne "CustomLevel" -and $_.Name -ne "Name" }
+                        # Rename "Value" to "Target"
+                        $eventData | ForEach-Object { $_."Name" = "Target" }
+                    } else {
+                        $serverName = $null
+                        $eventData = $eventXML.Event.EventData.Data
+                    } 
+
+                    # Extract event data names and values
+                    $eventDataObjects = $eventData | Where-Object { $_.Name -ne $null } | ForEach-Object {
+                        [PSCustomObject]@{
+                            "Data Name" = $_.Name
+                            "Data Value" = $_.'#text'
+                        }
+                    }
+
+                    # Add Security UserID and Computer fields
+                    $securityUserID = $eventXML.Event.System.Security.UserID
+                    $securityComputer = $eventXML.Event.System.Computer
+
+                    # Extract additional data for event IDs 21, 22, 23, 25, and 40
+                    $userData = $eventXML.Event.UserData
+                    $sessionID = $userData.EventXML.SessionID
+                    $address = $userData.EventXML.Address
+
+                    # Extract Param1, Param2, and Param3 for event ID 1149
+                    if ($event.Id -eq 1149) {
+                        $param1 = $eventXML.Event.UserData.EventXML.Param1
+                        $param2 = $eventXML.Event.UserData.EventXML.Param2
+                        $param3 = $eventXML.Event.UserData.EventXML.Param3
+                    } else {
+                        $param1 = $null
+                        $param2 = $null
+                        $param3 = $null
+                    }
+
+                    # Extract user information for event ID 25
+                    if ($event.Id -eq 25) {
+                        $user = $eventXML.Event.UserData.EventXML.User
+                    } else {
+                        $user = $null
+                    }
+
+                    # Extract Session and Reason for event ID 40
+                    if ($event.Id -eq 40) {
+                        $session = $eventXML.Event.UserData.EventXML.Session
+                        $reason = $eventXML.Event.UserData.EventXML.Reason
+                    } else {
+                        $session = $null
+                        $reason = $null
+                    }
+
+                    # Extract Session for event ID 23
+                    if ($event.Id -eq 23) {
+                        $session = $eventXML.Event.UserData.EventXML.Session
+                    } else {
+                        $session = $null
+                    }
+
+                    # Create a custom object for each event
+                    $eventObject = New-Object PSObject -Property @{
+                        "Time" = $eventTime
+                        "Event ID" = $event.Id
+                        "Subject User" = $subjectUserName
+                        "Subject Domain" = $subjectUserDomain
+                        "Target Server" = $targetServerName
+                        "Account Whose Credentials Were Used" = $accountUsed
+                        "Account Domain" = $accountDomain
+                        "Network Address" = $networkAddress
+                        "Hostname" = $hostname
+                        "Server Name" = $serverName
+                        "Security UserID" = $securityUserID
+                        "Security Computer" = $securityComputer
+                        "Logon Type" = $logonType
+                        "Session ID" = $sessionID
+                        "Address" = $address
+                        "Target User" = $param1
+                        "Target Domain" = $param2
+                        "Target IP" = $param3
+                        "User" = $user
+                        "Session" = $session
+                        "Reason" = $reason
+                    }
+
+                    # Add event data to the event object
+                    $eventDataObjects | ForEach-Object {
+                        if ($_.Name -ne $null) {
+                            $eventObject | Add-Member -MemberType NoteProperty -Name $_."Data Name" -Value $_."Data Value"
+                        }
+                    }
+
+                    # Add the event object to the array
+                    $eventObjects += $eventObject
+                }
+            } else {
+                Write-Output "No events found in $($logFile.FullName)"
+            }
+        }
+
+        # Export the array to CSV with desired column order
+        $eventObjects | Select-Object "Time", "Event ID", "Subject User", "Subject Domain", "Target Server", "Account Whose Credentials Were Used", "Account Domain", "Network Address", "Hostname", "Server Name", "Security UserID", "Security Computer", "Logon Type", "Session ID", "Address", "Target User", "Target Domain", "Target IP", "User", "Session", "Reason" | Export-Csv -Path $CsvFilePath -NoTypeInformation
+        Write-Output "Events with Event IDs $($eventIDs -join ',') saved to $CsvFilePath."
+    } else {
+        Write-Output "No .evtx files found in the specified folder."
+    }
+}
