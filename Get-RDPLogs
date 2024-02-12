@@ -112,16 +112,31 @@ function Get-RDPLogs
     # resource https://frsecure.com/blog/rdp-connection-event-logs/
     $eventIDs = @(4648, 4625, 4624, 1024, 1102, 1149, 21, 22, 23, 25, 40)
 
+    # SOURCE PC:	
+    # Security	4648
+    # TerminalServices-RDPClient/Operational	1024, 1102
     # 4648    Authorization using explicit credentials // Outgoing No Validation // Target hostname will populate if available
-    # 4624    Successful logins // Incoming
-    # 4625    Failed logins // Incoming 
     # 1024    Displays attempt connection typically a few seconds before 4648 // Target hostname will populate if available 
     # 1102    Displays target IP once the host has initiated a connection with the remote machine. Usually about 10 seconds (give or take a few) after the 1024 event
+
+    # DESTINATION PC:	
+    # LOG ON:	
+    # Security	4624, 4625
+    # 4624    Successful logins // Incoming
+    # 4625    Failed logins // Incoming 
+
+
+    # TerminalServices-RemoteConnectionManager/Operational	1149
+    # TerminalServices-LocalSessionManager/Operational	21, 22, 25
     # 1149    Displays source IP for RDP connection to this machine
-    # 21      Displays account used to log into system along with remote IP // Only displays on successful connection to a session
+    # 21      Displays account used to log into the system along with remote IP // Only displays on successful connection to a session
     # 22      Displays almost the same as 21 but registers the reception of the Shell start notification, which can be additional evidence of the interactive logon session
-    # 23      Displays when a session is logged off successfully.
     # 25      Displays when RDP is reconnecting to a session
+
+    # LOG OFF:	
+    # Security	4634, 4647
+    # TerminalServices-LocalSessionManager/Operational	23, 40
+    # 23      Displays when a session is logged off successfully.
     # 40      Displays a code whenever a session is disconnected, so that could be an interruption or the user disconnecting or logging off.
               # Code 0 means that there is simply no additional information available for the disconnection.
               # Code 2 is similar to code 11; it is logged when an administrative tool was used to disconnect the session from another session.
