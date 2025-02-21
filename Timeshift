@@ -1,0 +1,81 @@
+#include <windows.h>
+#include <iostream>
+#include <string>
+
+void ModifyTimestamps(const std::string& filePath, SYSTEMTIME* creationTime, SYSTEMTIME* accessTime, SYSTEMTIME* writeTime) {
+    HANDLE hFile = CreateFile(filePath.c_str(), FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    
+    if (hFile == INVALID_HANDLE_VALUE) {
+        std::cerr << "[!] Failed to open file. Check if it exists or has the right permissions." << std::endl;
+        return;
+    }
+    
+    FILETIME ftCreation, ftAccess, ftWrite;
+    FILETIME *pftCreation = nullptr, *pftAccess = nullptr, *pftWrite = nullptr;
+    
+    if (creationTime) {
+        SystemTimeToFileTime(creationTime, &ftCreation);
+        pftCreation = &ftCreation;
+    }
+    if (accessTime) {
+        SystemTimeToFileTime(accessTime, &ftAccess);
+        pftAccess = &ftAccess;
+    }
+    if (writeTime) {
+        SystemTimeToFileTime(writeTime, &ftWrite);
+        pftWrite = &ftWrite;
+    }
+    
+    if (!SetFileTime(hFile, pftCreation, pftAccess, pftWrite)) {
+        std::cerr << "[!] Failed to modify timestamps." << std::endl;
+    } else {
+        std::cout << "[*] Successfully modified timestamps for " << filePath << std::endl;
+    }
+    
+    CloseHandle(hFile);
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 3) {
+        std::cerr << "Usage: timestomp.exe <file_path> [-c YYYY-MM-DD HH:MM:SS] [-a YYYY-MM-DD HH:MM:SS] [-w YYYY-MM-DD HH:MM:SS] [-all YYYY-MM-DD HH:MM:SS]" << std::endl;
+        return 1;
+    }
+    
+    std::string filePath = argv[1];
+    SYSTEMTIME stCreation = {}, stAccess = {}, stWrite = {};
+    SYSTEMTIME *pStCreation = nullptr, *pStAccess = nullptr, *pStWrite = nullptr;
+    
+    for (int i = 2; i < argc; i++) {
+        if (std::string(argv[i]) == "-c" && i + 1 < argc) {
+            sscanf_s(argv[++i], "%d-%d-%d %d:%d:%d", &stCreation.wYear, &stCreation.wMonth, &stCreation.wDay, &stCreation.wHour, &stCreation.wMinute, &stCreation.wSecond);
+            pStCreation = &stCreation;
+        } else if (std::string(argv[i]) == "-a" && i + 1 < argc) {
+            sscanf_s(argv[++i], "%d-%d-%d %d:%d:%d", &stAccess.wYear, &stAccess.wMonth, &stAccess.wDay, &stAccess.wHour, &stAccess.wMinute, &stAccess.wSecond);
+            pStAccess = &stAccess;
+        } else if (std::string(argv[i]) == "-w" && i + 1 < argc) {
+            sscanf_s(argv[++i], "%d-%d-%d %d:%d:%d", &stWrite.wYear, &stWrite.wMonth, &stWrite.wDay, &stWrite.wHour, &stWrite.wMinute, &stWrite.wSecond);
+            pStWrite = &stWrite;
+        } else if (std::string(argv[i]) == "-all" && i + 1 < argc) {
+            sscanf_s(argv[++i], "%d-%d-%d %d:%d:%d", &stCreation.wYear, &stCreation.wMonth, &stCreation.wDay, &stCreation.wHour, &stCreation.wMinute, &stCreation.wSecond);
+            stAccess = stCreation;
+            stWrite = stCreation;
+            pStCreation = &stCreation;
+            pStAccess = &stAccess;
+            pStWrite = &stWrite;
+        }
+    }
+    
+    if (!pStCreation && !pStAccess && !pStWrite) {
+        std::cerr << "[!] At least one timestamp (-c, -a, -w, or -all) must be specified." << std::endl;
+        return 1;
+    }
+    
+    ModifyTimestamps(filePath, pStCreation, pStAccess, pStWrite);
+    return 0;
+}
+
+# x86_64-w64-mingw32-g++ ts.cpp -static -o fm.exe
+# or 
+# g++ file_timestomp.cpp -static -o timestomp.exe
+# or sudo apt update
+# sudo apt install mingw-w64 -y
